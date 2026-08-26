@@ -8,7 +8,7 @@ describe('buildSnapshotWorkbook', () => {
       { brand: 'DarkSide', flavor: 'CyberKiwi', weight: '250g', quantity: 3, totalEur: 15 },
     ]);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Order')!;
     expect(sheet.getRow(1).getCell(1).value).toBe('Brand');
     expect(sheet.getRow(2).getCell(1).value).toBe('DarkSide');

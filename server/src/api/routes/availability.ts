@@ -24,11 +24,11 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
         if (part.type === 'file' && part.fieldname === 'image') {
           fileBuffer = await part.toBuffer();
           mimeType = part.mimetype;
-        } else if (part.fieldname === 'vendorId') {
+        } else if (part.type === 'field' && part.fieldname === 'vendorId') {
           fields.vendorId = Number(part.value);
-        } else if (part.fieldname === 'brandId') {
+        } else if (part.type === 'field' && part.fieldname === 'brandId') {
           fields.brandId = Number(part.value);
-        } else if (part.fieldname === 'weightId') {
+        } else if (part.type === 'field' && part.fieldname === 'weightId') {
           fields.weightId = Number(part.value);
         }
       }
