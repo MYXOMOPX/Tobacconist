@@ -20,7 +20,7 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
       let mimeType = 'image/jpeg';
 
       for await (const part of req.parts()) {
-        if (part.type === 'file') {
+        if (part.type === 'file' && part.fieldname === 'image') {
           fileBuffer = await part.toBuffer();
           mimeType = part.mimetype;
         } else if (part.fieldname === 'vendorId') {

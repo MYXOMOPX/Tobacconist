@@ -5,10 +5,12 @@ import FormData from 'form-data';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { createTestDb } from '../../db/client';
 import { createVendor } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { availabilityRoutes } from './availability';
+import { availabilityUploads } from '../../db/schema';
 import type { AuthedUser } from '../middleware/authenticate';
 import type { GeminiClient } from '../../gemini/client';
 
@@ -100,5 +102,35 @@ describe('availability routes', () => {
       payload: { vendorId: 1, brandId: 1, weightId: 1, entries: [] },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('saves nothing to disk or database when parsing fails', async () => {
+    const { app, db } = testApp(admin, 'not valid json at all');
+    const vendor = await createVendor(db, 'Vasya');
+    const brand = await createBrand(db, 'DarkSide');
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+
+    const form = new FormData();
+    form.append('vendorId', String(vendor.id));
+    form.append('brandId', String(brand.id));
+    form.append('weightId', String(w250.id));
+    form.append('image', Buffer.from('fake-bytes'), { filename: 'photo.jpg', contentType: 'image/jpeg' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/availability/parse',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+
+    expect(res.statusCode).not.toBe(200);
+
+    // Verify no file was written
+    const savedFiles = await fs.readdir(uploadsDir);
+    expect(savedFiles).toHaveLength(0);
+
+    // Verify no audit record was inserted
+    const uploadRecords = await db.select().from(availabilityUploads).where(eq(availabilityUploads.vendorId, vendor.id)).all();
+    expect(uploadRecords).toHaveLength(0);
   });
 });
