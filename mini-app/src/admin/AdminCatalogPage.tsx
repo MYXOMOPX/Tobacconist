@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, uploadAvailabilityImage } from '../apiClient';
+import { useAction } from '../useAction';
 
 type Vendor = { id: number; name: string; archived: boolean };
 type Brand = { id: number; name: string };
@@ -21,6 +22,7 @@ export function AdminCatalogPage() {
   const [uploadWeightId, setUploadWeightId] = useState<number | null>(null);
   const [proposedEntries, setProposedEntries] = useState<AvailabilityEntry[] | null>(null);
   const [uploading, setUploading] = useState(false);
+  const { error, run } = useAction();
 
   async function reloadCatalog() {
     setVendors(await api.get<Vendor[]>('/admin/vendors'));
@@ -29,48 +31,60 @@ export function AdminCatalogPage() {
   }
 
   useEffect(() => {
-    reloadCatalog();
-  }, []);
+    run(reloadCatalog);
+  }, [run]);
 
   useEffect(() => {
     if (selectedVendorId == null) {
       setPrices([]);
       return;
     }
-    api.get<PriceRow[]>(`/admin/vendors/${selectedVendorId}/prices`).then(setPrices);
-  }, [selectedVendorId]);
+    run(async () => {
+      setPrices(await api.get<PriceRow[]>(`/admin/vendors/${selectedVendorId}/prices`));
+    });
+  }, [selectedVendorId, run]);
 
-  async function createVendor() {
+  function createVendor() {
     if (!newVendorName.trim()) return;
-    await api.post('/admin/vendors', { name: newVendorName.trim() });
-    setNewVendorName('');
-    await reloadCatalog();
+    return run(async () => {
+      await api.post('/admin/vendors', { name: newVendorName.trim() });
+      setNewVendorName('');
+      await reloadCatalog();
+    });
   }
 
-  async function createBrand() {
+  function createBrand() {
     if (!newBrandName.trim()) return;
-    await api.post('/admin/brands', { name: newBrandName.trim() });
-    setNewBrandName('');
-    await reloadCatalog();
+    return run(async () => {
+      await api.post('/admin/brands', { name: newBrandName.trim() });
+      setNewBrandName('');
+      await reloadCatalog();
+    });
   }
 
-  async function savePrice(brandId: number) {
+  function savePrice(brandId: number) {
     if (selectedVendorId == null) return;
     const value = Number(priceInputs[brandId]);
     if (!value || value <= 0) return;
-    await api.put(`/admin/vendors/${selectedVendorId}/prices/${brandId}`, { pricePerKgEur: value });
-    setPrices(await api.get<PriceRow[]>(`/admin/vendors/${selectedVendorId}/prices`));
+    return run(async () => {
+      await api.put(`/admin/vendors/${selectedVendorId}/prices/${brandId}`, { pricePerKgEur: value });
+      setPrices(await api.get<PriceRow[]>(`/admin/vendors/${selectedVendorId}/prices`));
+    });
   }
 
-  async function handleFileSelected(file: File | undefined) {
+  function handleFileSelected(file: File | undefined) {
     if (!file || selectedVendorId == null || uploadBrandId == null || uploadWeightId == null) return;
-    setUploading(true);
-    try {
-      const { entries } = await uploadAvailabilityImage(selectedVendorId, uploadBrandId, uploadWeightId, file);
-      setProposedEntries(entries);
-    } finally {
-      setUploading(false);
-    }
+    // Gemini parsing is the most failure-prone call in the app: a failure must
+    // surface, not just silently clear the spinner.
+    return run(async () => {
+      setUploading(true);
+      try {
+        const { entries } = await uploadAvailabilityImage(selectedVendorId, uploadBrandId, uploadWeightId, file);
+        setProposedEntries(entries);
+      } finally {
+        setUploading(false);
+      }
+    });
   }
 
   function toggleEntry(index: number) {
@@ -80,19 +94,22 @@ export function AdminCatalogPage() {
     setProposedEntries(next);
   }
 
-  async function confirmAvailability() {
+  function confirmAvailability() {
     if (selectedVendorId == null || uploadBrandId == null || uploadWeightId == null || !proposedEntries) return;
-    await api.post('/admin/availability/confirm', {
-      vendorId: selectedVendorId,
-      brandId: uploadBrandId,
-      weightId: uploadWeightId,
-      entries: proposedEntries,
+    return run(async () => {
+      await api.post('/admin/availability/confirm', {
+        vendorId: selectedVendorId,
+        brandId: uploadBrandId,
+        weightId: uploadWeightId,
+        entries: proposedEntries,
+      });
+      setProposedEntries(null);
     });
-    setProposedEntries(null);
   }
 
   return (
     <section>
+      {error && <p role="alert">{error}</p>}
       <h2>Барыги</h2>
       <ul>
         {vendors.map((v) => (

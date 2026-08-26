@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
+import { useAction } from '../useAction';
 
 type RoundSummary = {
   id: number;
@@ -20,18 +21,24 @@ type RoundDetail = {
 export function HistoryPage() {
   const [rounds, setRounds] = useState<RoundSummary[]>([]);
   const [selected, setSelected] = useState<RoundDetail | null>(null);
+  const { error, run } = useAction();
 
   useEffect(() => {
-    api.get<RoundSummary[]>('/history').then(setRounds);
-  }, []);
+    run(async () => {
+      setRounds(await api.get<RoundSummary[]>('/history'));
+    });
+  }, [run]);
 
-  async function openRound(id: number) {
-    setSelected(await api.get<RoundDetail>(`/history/${id}`));
+  function openRound(id: number) {
+    return run(async () => {
+      setSelected(await api.get<RoundDetail>(`/history/${id}`));
+    });
   }
 
   return (
     <section>
       <h2>История закупок</h2>
+      {error && <p role="alert">{error}</p>}
       <ul>
         {rounds.map((r) => (
           <li key={r.id}>

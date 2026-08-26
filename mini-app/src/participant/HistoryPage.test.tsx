@@ -32,4 +32,41 @@ describe('HistoryPage', () => {
     expect(screen.getByText(/— оплачено$/)).toBeInTheDocument();
     expect(screen.queryByText(/не оплачено/)).not.toBeInTheDocument();
   });
+
+  it('works unchanged for an admin caller, whose /history lists every closed round', async () => {
+    // The server returns ALL closed rounds for admins; the detail view carries the
+    // caller's own (possibly zero) totals.
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/history') {
+        return [
+          { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' },
+          { id: 8, vendorId: 2, vendorName: 'Petya', status: 'closed', openedAt: '', closedAt: '2026-08-10' },
+        ];
+      }
+      if (path === '/history/8') {
+        return {
+          round: { id: 8, vendorId: 2, vendorName: 'Petya', status: 'closed', openedAt: '', closedAt: '2026-08-10' },
+          items: [],
+          totalKg: 0,
+          totalEur: 0,
+          paid: false,
+        };
+      }
+      return [];
+    });
+
+    const user = userEvent.setup();
+    render(<HistoryPage />);
+    expect(await screen.findByText(/Vasya/)).toBeInTheDocument();
+    await user.click(await screen.findByText(/Petya/));
+
+    expect(await screen.findByText(/0.00 кг, 0.00 €/)).toBeInTheDocument();
+    expect(screen.getByText(/не оплачено$/)).toBeInTheDocument();
+  });
+
+  it('shows the error message when the history load fails', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('round not found'));
+    render(<HistoryPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('round not found');
+  });
 });

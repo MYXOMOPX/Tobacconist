@@ -63,4 +63,35 @@ describe('AdminCatalogPage', () => {
       })
     );
   });
+
+  it('shows the error message when the Gemini parse fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadAvailabilityImage).mockRejectedValue(new Error('failed to parse availability image'));
+    render(<AdminCatalogPage />);
+
+    await user.click(await screen.findByText('Vasya'));
+    await user.selectOptions(screen.getByDisplayValue('Бренд...'), '1');
+    await user.selectOptions(screen.getByDisplayValue('Граммовка...'), '1');
+
+    const file = new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' });
+    const fileInput = screen.getByLabelText('Файл наличия', { selector: 'input' }) as HTMLInputElement;
+    await user.upload(fileInput, file);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('failed to parse availability image');
+    // Spinner released, and nothing bogus proposed.
+    expect(fileInput.disabled).toBe(false);
+    expect(screen.queryByText('Проверь распознанное')).not.toBeInTheDocument();
+  });
+
+  it('shows the error message when creating a vendor fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockRejectedValue(new Error('vendor name already used'));
+    render(<AdminCatalogPage />);
+    await screen.findByText('Vasya');
+
+    await user.type(screen.getByPlaceholderText('Новый барыга'), 'Kolya');
+    await user.click(screen.getByText('Добавить барыгу'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('vendor name already used');
+  });
 });

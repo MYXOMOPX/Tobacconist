@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
+import { useAction } from '../useAction';
 
 type AssortmentRow = {
   brandId: number;
@@ -12,9 +13,14 @@ type AssortmentRow = {
 };
 type AggregateLine = {
   brandId: number;
+  brandName: string;
   flavorId: number;
+  flavorName: string;
   weightId: number;
+  grams: number;
   quantity: number;
+  totalEur: number;
+  available: boolean;
 };
 type MyOrder = {
   round: { id: number; vendorId: number; status: string } | null;
@@ -32,6 +38,7 @@ export function OrderBuilderPage() {
   const [assortment, setAssortment] = useState<AssortmentRow[]>([]);
   const [mine, setMine] = useState<MyOrder | null>(null);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const { error, run } = useAction();
 
   async function reload() {
     setAssortment(await api.get<AssortmentRow[]>('/orders/assortment'));
@@ -45,23 +52,30 @@ export function OrderBuilderPage() {
   }
 
   useEffect(() => {
-    reload();
-  }, []);
+    run(reload);
+  }, [run]);
 
-  async function saveQuantity(row: AssortmentRow) {
-    const key = lineKey(row.brandId, row.flavorId, row.weightId);
-    const quantity = Number(quantities[key] ?? 0);
-    await api.put('/orders/items', {
-      brandId: row.brandId,
-      flavorId: row.flavorId,
-      weightId: row.weightId,
-      quantity,
+  function saveQuantity(row: AssortmentRow) {
+    return run(async () => {
+      const key = lineKey(row.brandId, row.flavorId, row.weightId);
+      const quantity = Number(quantities[key] ?? 0);
+      await api.put('/orders/items', {
+        brandId: row.brandId,
+        flavorId: row.flavorId,
+        weightId: row.weightId,
+        quantity,
+      });
+      setMine(await api.get<MyOrder>('/orders/mine'));
     });
-    setMine(await api.get<MyOrder>('/orders/mine'));
   }
 
   if (!mine?.round) {
-    return <p>Сейчас нет активной закупки.</p>;
+    return (
+      <section>
+        {error && <p role="alert">{error}</p>}
+        <p>Сейчас нет активной закупки.</p>
+      </section>
+    );
   }
 
   const byBrand = new Map<string, AssortmentRow[]>();
@@ -74,6 +88,7 @@ export function OrderBuilderPage() {
   return (
     <section>
       <h2>Мой заказ</h2>
+      {error && <p role="alert">{error}</p>}
       {[...byBrand.entries()].map(([brandName, rows]) => (
         <div key={brandName}>
           <h3>{brandName}</h3>
@@ -98,6 +113,20 @@ export function OrderBuilderPage() {
           </ul>
         </div>
       ))}
+
+      {mine.items.length > 0 && (
+        <div>
+          <h3>Ваш заказ</h3>
+          <ul>
+            {mine.items.map((item) => (
+              <li key={lineKey(item.brandId, item.flavorId, item.weightId)}>
+                {item.brandName} - {item.flavorName} - {item.grams}г: x{item.quantity}
+                {!item.available && <strong> больше не в наличии</strong>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h3>Итого</h3>
       <p>

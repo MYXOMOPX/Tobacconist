@@ -1,83 +1,134 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../apiClient';
+import { useAction } from '../useAction';
 
 type Round = { id: number; vendorId: number; vendorName: string; status: 'open' | 'closed'; openedAt: string; closedAt: string | null };
 type Vendor = { id: number; name: string; archived: boolean };
 type TableRow = { brand: string; flavor: string; weight: string; quantity: number; totalEur: number };
 type Snapshot = { text: string; table: TableRow[] };
 type ChecklistItem = { id: number; brandName: string; flavorName: string; grams: number; expectedQty: number; receivedQty: number };
-type Payment = { userId: number; displayName: string; paid: boolean };
+type ParticipantSummary = { userId: number; displayName: string; totalKg: number; totalEur: number; paid: boolean };
 
 export function AdminRoundPage() {
   const [round, setRound] = useState<Round | null | undefined>(undefined);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
+  const { error, run } = useAction();
 
-  const loadRound = useCallback(async () => {
+  /** Loads a specific round by id — works for closed rounds too, unlike /rounds/active. */
+  const loadRoundById = useCallback(async (roundId: number) => {
+    setRound(await api.get<Round>(`/rounds/${roundId}`));
+  }, []);
+
+  const loadInitialRound = useCallback(async () => {
     const active = await api.get<Round | null>('/rounds/active');
-    setRound(active);
+    if (active) {
+      setRound(active);
+      return;
+    }
+    // No open round: fall back to the admin's most recent closed round so the
+    // checklist / snapshot / payments for it stay reachable.
+    const history = await api.get<Round[]>('/history');
+    const closed = history.filter((r) => r.status === 'closed');
+    if (closed.length === 0) {
+      setRound(null);
+      return;
+    }
+    const mostRecent = closed.reduce((a, b) => ((b.closedAt ?? '') > (a.closedAt ?? '') ? b : a));
+    setRound(await api.get<Round>(`/rounds/${mostRecent.id}`));
   }, []);
 
   useEffect(() => {
-    loadRound();
-    api.get<Vendor[]>('/admin/vendors').then(setVendors);
-  }, [loadRound]);
+    run(async () => {
+      await loadInitialRound();
+      setVendors(await api.get<Vendor[]>('/admin/vendors'));
+    });
+  }, [loadInitialRound, run]);
 
   useEffect(() => {
     if (!round) {
       setSnapshot(null);
       setChecklist([]);
-      setPayments([]);
+      setParticipants([]);
       return;
     }
-    api.get<Snapshot>(`/rounds/${round.id}/snapshot`).then(setSnapshot);
-    api.get<Payment[]>(`/rounds/${round.id}/payments`).then(setPayments);
-    if (round.status === 'closed') {
-      api.get<ChecklistItem[]>(`/rounds/${round.id}/checklist`).then(setChecklist);
-    }
-  }, [round]);
+    const roundId = round.id;
+    run(async () => {
+      setSnapshot(await api.get<Snapshot>(`/rounds/${roundId}/snapshot`));
+      setParticipants(await api.get<ParticipantSummary[]>(`/rounds/${roundId}/summaries`));
+      if (round.status === 'closed') {
+        setChecklist(await api.get<ChecklistItem[]>(`/rounds/${roundId}/checklist`));
+      }
+    });
+  }, [round, run]);
 
-  async function startRound(vendorId: number) {
-    await api.post('/rounds', { vendorId });
-    await loadRound();
+  function startRound(vendorId: number) {
+    return run(async () => {
+      const created = await api.post<Round>('/rounds', { vendorId });
+      await loadRoundById(created.id);
+    });
   }
 
-  async function closeRound() {
+  function closeRound() {
     if (!round) return;
-    await api.post(`/rounds/${round.id}/close`);
-    await loadRound();
+    const roundId = round.id;
+    return run(async () => {
+      await api.post(`/rounds/${roundId}/close`);
+      // Re-fetch by id, not /rounds/active — the round is no longer "active".
+      await loadRoundById(roundId);
+    });
   }
 
-  async function reopenRound() {
+  function reopenRound() {
     if (!round) return;
-    await api.post(`/rounds/${round.id}/reopen`);
-    await loadRound();
+    const roundId = round.id;
+    return run(async () => {
+      await api.post(`/rounds/${roundId}/reopen`);
+      await loadRoundById(roundId);
+    });
   }
 
-  async function adjustChecklist(itemId: number, delta: number) {
+  function adjustChecklist(itemId: number, delta: number) {
     if (!round) return;
-    await api.post<ChecklistItem>(`/rounds/${round.id}/checklist/${itemId}/adjust`, { delta });
-    setChecklist(await api.get<ChecklistItem[]>(`/rounds/${round.id}/checklist`));
+    const roundId = round.id;
+    return run(async () => {
+      await api.post<ChecklistItem>(`/rounds/${roundId}/checklist/${itemId}/adjust`, { delta });
+      setChecklist(await api.get<ChecklistItem[]>(`/rounds/${roundId}/checklist`));
+    });
   }
 
-  async function togglePaid(userId: number, paid: boolean) {
+  function togglePaid(userId: number, paid: boolean) {
     if (!round) return;
-    await api.post(`/rounds/${round.id}/payments/${userId}`, { paid });
-    setPayments(await api.get<Payment[]>(`/rounds/${round.id}/payments`));
+    const roundId = round.id;
+    return run(async () => {
+      await api.post(`/rounds/${roundId}/payments/${userId}`, { paid });
+      setParticipants(await api.get<ParticipantSummary[]>(`/rounds/${roundId}/summaries`));
+    });
   }
 
-  async function exportSnapshot() {
+  function exportSnapshot() {
     if (!round) return;
-    await api.post(`/rounds/${round.id}/snapshot/export`);
+    const roundId = round.id;
+    return run(async () => {
+      await api.post(`/rounds/${roundId}/snapshot/export`);
+    });
   }
 
-  if (round === undefined) return <p>Загрузка...</p>;
+  if (round === undefined) {
+    return (
+      <section>
+        {error && <p role="alert">{error}</p>}
+        <p>Загрузка...</p>
+      </section>
+    );
+  }
 
   if (round === null) {
     return (
       <section>
+        {error && <p role="alert">{error}</p>}
         <h2>Начать раунд</h2>
         <ul>
           {vendors
@@ -94,6 +145,7 @@ export function AdminRoundPage() {
 
   return (
     <section>
+      {error && <p role="alert">{error}</p>}
       <h2>
         Раунд #{round.id} — {round.vendorName} ({round.status})
       </h2>
@@ -153,7 +205,7 @@ export function AdminRoundPage() {
       <div>
         <h3>Оплаты</h3>
         <ul>
-          {payments.map((p) => (
+          {participants.map((p) => (
             <li key={p.userId}>
               <label>
                 <input
@@ -162,7 +214,8 @@ export function AdminRoundPage() {
                   onChange={(e) => togglePaid(p.userId, e.target.checked)}
                 />
                 {p.displayName}
-              </label>
+              </label>{' '}
+              — {p.totalKg.toFixed(2)} кг, {p.totalEur.toFixed(2)} €
             </li>
           ))}
         </ul>

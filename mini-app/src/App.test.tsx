@@ -8,6 +8,11 @@ vi.mock('./apiClient', () => ({
     get: vi.fn(async (path: string) => {
       if (path === '/me') return { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
       if (path === '/rounds/active') return null;
+      if (path === '/history')
+        return [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' }];
+      if (path === '/rounds/7')
+        return { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' };
+      if (path === '/rounds/7/snapshot') return { text: '', table: [] };
       return [];
     }),
     post: vi.fn(),
@@ -30,5 +35,15 @@ describe('App', () => {
 
     await user.click(screen.getByText('Каталог'));
     expect(await screen.findByText('Барыги')).toBeInTheDocument();
+  });
+
+  it('gives the admin a history tab that lists closed rounds', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByTestId('shell');
+
+    await user.click(screen.getByText('История'));
+    expect(await screen.findByText('История закупок')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Vasya/ })).toBeInTheDocument();
   });
 });

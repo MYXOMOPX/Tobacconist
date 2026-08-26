@@ -9,7 +9,7 @@ import { HistoryPage } from './participant/HistoryPage';
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [adminTab, setAdminTab] = useState<'round' | 'catalog'>('round');
+  const [adminTab, setAdminTab] = useState<'round' | 'catalog' | 'history'>('round');
   const [memberTab, setMemberTab] = useState<'order' | 'history'>('order');
 
   useEffect(() => {
@@ -28,8 +28,11 @@ export function App() {
         <nav>
           <button onClick={() => setAdminTab('round')}>Раунд</button>
           <button onClick={() => setAdminTab('catalog')}>Каталог</button>
+          <button onClick={() => setAdminTab('history')}>История</button>
         </nav>
-        {adminTab === 'round' ? <AdminRoundPage /> : <AdminCatalogPage />}
+        {adminTab === 'round' && <AdminRoundPage />}
+        {adminTab === 'catalog' && <AdminCatalogPage />}
+        {adminTab === 'history' && <HistoryPage />}
       </div>
     );
   }
