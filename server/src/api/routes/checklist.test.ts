@@ -12,6 +12,7 @@ import { checklistRoutes } from './checklist';
 import type { AuthedUser } from '../middleware/authenticate';
 
 const admin: AuthedUser = { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
+const member: AuthedUser = { id: 2, telegramId: '2', displayName: 'Member', role: 'member' };
 
 function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   const app = Fastify();
@@ -68,5 +69,12 @@ describe('checklist routes', () => {
       payload: { delta: 2 },
     });
     expect(res.json().receivedQty).toBe(2);
+  });
+
+  it('rejects GET / as a non-admin with 403', async () => {
+    const { db, round } = await seedClosedRoundChecklist();
+    const app = testApp(member, db);
+    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/checklist` });
+    expect(res.statusCode).toBe(403);
   });
 });
