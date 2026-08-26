@@ -12,6 +12,7 @@ export function buildApp(deps: {
   adminTelegramId: string;
   chatMemberApi: ChatMemberApi;
   miniAppDistPath?: string;
+  onApiReady?: (api: FastifyInstance) => Promise<void>;
 }): FastifyInstance {
   const app = Fastify({ logger: true });
   app.register(multipart);
@@ -34,6 +35,9 @@ export function buildApp(deps: {
     async (api) => {
       api.addHook('preHandler', authenticate);
       api.decorate('db', deps.db);
+      if (deps.onApiReady) {
+        await deps.onApiReady(api);
+      }
       // route plugins are registered here by Tasks 15-21
     },
     { prefix: '/api' }

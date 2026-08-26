@@ -58,16 +58,26 @@ export function createAuthenticate(deps: {
         row = existing;
       }
     } else {
-      [row] = await deps.db
-        .insert(users)
-        .values({
-          telegramId: verified.telegramId,
-          displayName: verified.displayName,
-          role,
-          firstSeenAt: new Date().toISOString(),
-        })
-        .returning()
-        .all();
+      try {
+        [row] = await deps.db
+          .insert(users)
+          .values({
+            telegramId: verified.telegramId,
+            displayName: verified.displayName,
+            role,
+            firstSeenAt: new Date().toISOString(),
+          })
+          .returning()
+          .all();
+      } catch (err) {
+        // Handle race condition: another request may have inserted the same user concurrently
+        // Re-select the now-existing row
+        const reselect = await deps.db.select().from(users).where(eq(users.telegramId, verified.telegramId)).get();
+        if (!reselect) {
+          throw err; // Not a duplicate key error, re-throw
+        }
+        row = reselect;
+      }
     }
 
     req.authedUser = { id: row.id, telegramId: row.telegramId, displayName: row.displayName, role: row.role as 'admin' | 'member' };
