@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { api } from './apiClient';
 import type { Me } from './types';
 import { AdminCatalogPage } from './admin/AdminCatalogPage';
+import { AdminRoundPage } from './admin/AdminRoundPage';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adminTab, setAdminTab] = useState<'round' | 'catalog'>('round');
 
   useEffect(() => {
     api
@@ -20,7 +22,11 @@ export function App() {
   if (me.role === 'admin') {
     return (
       <div data-testid="shell">
-        <AdminCatalogPage />
+        <nav>
+          <button onClick={() => setAdminTab('round')}>Раунд</button>
+          <button onClick={() => setAdminTab('catalog')}>Каталог</button>
+        </nav>
+        {adminTab === 'round' ? <AdminRoundPage /> : <AdminCatalogPage />}
       </div>
     );
   }
