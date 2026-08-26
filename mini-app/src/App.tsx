@@ -3,11 +3,14 @@ import { api } from './apiClient';
 import type { Me } from './types';
 import { AdminCatalogPage } from './admin/AdminCatalogPage';
 import { AdminRoundPage } from './admin/AdminRoundPage';
+import { OrderBuilderPage } from './participant/OrderBuilderPage';
+import { HistoryPage } from './participant/HistoryPage';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState<'round' | 'catalog'>('round');
+  const [memberTab, setMemberTab] = useState<'order' | 'history'>('order');
 
   useEffect(() => {
     api
@@ -31,5 +34,13 @@ export function App() {
     );
   }
 
-  return <p data-testid="shell">Мой заказ</p>;
+  return (
+    <div data-testid="shell">
+      <nav>
+        <button onClick={() => setMemberTab('order')}>Заказ</button>
+        <button onClick={() => setMemberTab('history')}>История</button>
+      </nav>
+      {memberTab === 'order' ? <OrderBuilderPage /> : <HistoryPage />}
+    </div>
+  );
 }
