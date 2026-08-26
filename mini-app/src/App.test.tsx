@@ -19,7 +19,8 @@ vi.mock('./apiClient', () => ({
 describe('App', () => {
   it('renders the admin shell once /api/me resolves', async () => {
     render(<App />);
-    expect(await screen.findByTestId('shell')).toBeInTheDocument();
+    await screen.findByTestId('shell');
+    expect(screen.getByText('Раунд')).toBeInTheDocument();
   });
 
   it('switches to the catalog tab', async () => {

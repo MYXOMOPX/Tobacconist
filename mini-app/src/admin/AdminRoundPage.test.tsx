@@ -21,6 +21,23 @@ describe('AdminRoundPage — no active round', () => {
 
     expect(api.post).toHaveBeenCalledWith('/rounds', { vendorId: 1 });
   });
+
+  it('excludes archived vendors from the start-round list', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/rounds/active') return null;
+      if (path === '/admin/vendors')
+        return [
+          { id: 1, name: 'Vasya', archived: false },
+          { id: 2, name: 'OldSupplier', archived: true },
+        ];
+      return [];
+    });
+
+    render(<AdminRoundPage />);
+    await screen.findByText('Vasya');
+
+    expect(screen.queryByText('OldSupplier')).not.toBeInTheDocument();
+  });
 });
 
 describe('AdminRoundPage — open round', () => {
@@ -45,6 +62,17 @@ describe('AdminRoundPage — open round', () => {
 
     await user.click(screen.getByText('Закрыть раунд'));
     expect(api.post).toHaveBeenCalledWith('/rounds/5/close');
+  });
+
+  it('renders the snapshot table alongside the text view', async () => {
+    render(<AdminRoundPage />);
+    const row = await screen.findByRole('row', { name: /DarkSide/ });
+
+    expect(row).toHaveTextContent('DarkSide');
+    expect(row).toHaveTextContent('CyberKiwi');
+    expect(row).toHaveTextContent('250g');
+    expect(row).toHaveTextContent('3');
+    expect(row).toHaveTextContent('15');
   });
 
   it('toggles a participant paid status', async () => {

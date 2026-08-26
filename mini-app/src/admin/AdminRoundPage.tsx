@@ -80,11 +80,13 @@ export function AdminRoundPage() {
       <section>
         <h2>Начать раунд</h2>
         <ul>
-          {vendors.map((v) => (
-            <li key={v.id}>
-              <button onClick={() => startRound(v.id)}>{v.name}</button>
-            </li>
-          ))}
+          {vendors
+            .filter((v) => !v.archived)
+            .map((v) => (
+              <li key={v.id}>
+                <button onClick={() => startRound(v.id)}>{v.name}</button>
+              </li>
+            ))}
         </ul>
       </section>
     );
@@ -107,6 +109,28 @@ export function AdminRoundPage() {
           <pre>{snapshot.text}</pre>
           <button onClick={() => navigator.clipboard?.writeText(snapshot.text)}>Скопировать</button>
           <button onClick={exportSnapshot}>Выгрузить в Telegram</button>
+          <table>
+            <thead>
+              <tr>
+                <th>Бренд</th>
+                <th>Вкус</th>
+                <th>Граммовка</th>
+                <th>Кол-во</th>
+                <th>Сумма</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.table.map((row, i) => (
+                <tr key={i}>
+                  <td>{row.brand}</td>
+                  <td>{row.flavor}</td>
+                  <td>{row.weight}</td>
+                  <td>{row.quantity}</td>
+                  <td>{row.totalEur}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
