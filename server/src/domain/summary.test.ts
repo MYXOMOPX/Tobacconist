@@ -54,4 +54,33 @@ describe('summary domain', () => {
     expect(summary.lines[0].quantity).toBe(5);
     expect(summary.totalEur).toBeCloseTo(25.0);
   });
+
+  it('throws when computing summary for a brand without a price snapshot', async () => {
+    const db = createTestDb();
+    const [admin] = await db.insert(users).values({ telegramId: 'a1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() }).returning().all();
+    const [friend] = await db.insert(users).values({ telegramId: 'f1', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() }).returning().all();
+    const vendor = await createVendor(db, 'Vasya');
+    const pricedBrand = await createBrand(db, 'DarkSide');
+    const unpricedBrand = await createBrand(db, 'NoPrice');
+    await setVendorBrandPrice(db, vendor.id, pricedBrand.id, 20); // only price the first brand
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+    const [{ flavorId: pricedFlavorId }] = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: pricedBrand.id,
+      weightId: w250.id,
+      entries: [{ name: 'CyberKiwi', available: true }],
+    });
+    const [{ flavorId: unpricedFlavorId }] = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: unpricedBrand.id,
+      weightId: w250.id,
+      entries: [{ name: 'Mystery', available: true }],
+    });
+    const round = await openRound(db, vendor.id, admin.id);
+    // Order from the unpriced brand - should succeed
+    await upsertOrderItem(db, { roundId: round.id, userId: friend.id, brandId: unpricedBrand.id, flavorId: unpricedFlavorId, weightId: w250.id, quantity: 1 });
+    // Computing summary should throw because there's no price snapshot for the unpriced brand
+    await expect(computeUserSummary(db, round.id, friend.id)).rejects.toThrow(`missing price snapshot for brandId ${unpricedBrand.id} in round ${round.id}`);
+    await expect(computeAggregateSummary(db, round.id)).rejects.toThrow(`missing price snapshot for brandId ${unpricedBrand.id} in round ${round.id}`);
+  });
 });

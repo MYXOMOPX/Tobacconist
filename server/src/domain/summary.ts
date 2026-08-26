@@ -37,7 +37,10 @@ async function buildLines(
   const lookup = await nameLookups(db);
   const lines: AggregateLine[] = [];
   for (const item of items) {
-    const pricePerKg = (await getRoundPriceSnapshot(db, roundId, item.brandId)) ?? 0;
+    const pricePerKg = await getRoundPriceSnapshot(db, roundId, item.brandId);
+    if (pricePerKg === null || pricePerKg === undefined) {
+      throw new Error(`missing price snapshot for brandId ${item.brandId} in round ${roundId}`);
+    }
     const grams = lookup.grams(item.weightId);
     const unitPrice = packPriceEur(pricePerKg, grams);
     lines.push({
