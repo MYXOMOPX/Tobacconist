@@ -19,6 +19,7 @@ export function createServer(config: Config) {
     adminTelegramId: config.adminTelegramId,
     groupChatId: config.groupChatId,
     miniAppUrl: config.publicUrl,
+    botInfo: config.botInfo,
   });
   const documentSender = createDocumentSender(bot);
 

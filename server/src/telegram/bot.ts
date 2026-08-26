@@ -1,4 +1,5 @@
 import { Bot } from 'grammy';
+import type { UserFromGetMe } from 'grammy/types';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { users } from '../db/schema';
@@ -96,8 +97,9 @@ export function createBot(deps: {
   adminTelegramId: string;
   groupChatId: string;
   miniAppUrl: string;
+  botInfo?: UserFromGetMe;
 }): Bot {
-  const bot = new Bot(deps.botToken);
+  const bot = new Bot(deps.botToken, deps.botInfo ? { botInfo: deps.botInfo } : undefined);
   bot.command('start_round', (ctx) => handleStartRoundCommand(ctx as unknown as StartRoundCtx, deps));
   bot.callbackQuery(/^start_round:\d+$/, (ctx) =>
     handleStartRoundCallback(ctx as unknown as StartRoundCallbackCtx, deps)

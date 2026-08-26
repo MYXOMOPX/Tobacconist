@@ -1,3 +1,5 @@
+import type { UserFromGetMe } from 'grammy/types';
+
 export type Config = {
   botToken: string;
   adminTelegramId: string;
@@ -6,6 +8,7 @@ export type Config = {
   dbPath: string;
   port: number;
   publicUrl: string;
+  botInfo?: UserFromGetMe;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
