@@ -1,0 +1,22 @@
+services:
+  tobacconist:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - tobacconist-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tobacconist.rule=Host(`${PUBLIC_HOST}`)"
+      - "traefik.http.routers.tobacconist.entrypoints=websecure"
+      - "traefik.http.routers.tobacconist.tls.certresolver=le"
+      - "traefik.http.services.tobacconist.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  tobacconist-data:
