@@ -4,7 +4,9 @@ import fastifyStatic from '@fastify/static';
 import type { Db } from '../db/client';
 import { createAuthenticate } from './middleware/authenticate';
 import { catalogRoutes } from './routes/catalog';
+import { availabilityRoutes } from './routes/availability';
 import type { ChatMemberApi } from '../telegram/auth';
+import type { GeminiClient } from '../gemini/availabilityParser';
 
 export function buildApp(deps: {
   db: Db;
@@ -12,6 +14,8 @@ export function buildApp(deps: {
   groupChatId: string;
   adminTelegramId: string;
   chatMemberApi: ChatMemberApi;
+  geminiClient: GeminiClient;
+  uploadsDir: string;
   miniAppDistPath?: string;
   onApiReady?: (api: FastifyInstance) => Promise<void>;
 }): FastifyInstance {
@@ -40,6 +44,7 @@ export function buildApp(deps: {
         await deps.onApiReady(api);
       }
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
+      api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
     },
     { prefix: '/api' }
   );
