@@ -28,28 +28,49 @@ export async function replaceAvailability(
     )
     .all();
 
+  // Track rows for each flavorId (both existing and newly created)
+  const rowsByFlavorId = new Map<number, number>();
+  for (const row of existingForTriple) {
+    rowsByFlavorId.set(row.vendor_flavor_availability.flavorId, row.vendor_flavor_availability.id);
+  }
+
   const seenFlavorIds = new Set<number>();
-  const result: { flavorId: number; flavorName: string; available: boolean }[] = [];
+  const resultMap = new Map<number, { flavorId: number; flavorName: string; available: boolean }>();
 
   for (const entry of entries) {
     const flavor = await findOrCreateFlavor(db, brandId, entry.name);
     seenFlavorIds.add(flavor.id);
-    const existingRow = existingForTriple.find(
-      (r) => r.vendor_flavor_availability.flavorId === flavor.id
-    );
-    if (existingRow) {
+
+    const existingRowId = rowsByFlavorId.get(flavor.id);
+    if (existingRowId) {
       await db
         .update(vendorFlavorAvailability)
         .set({ available: entry.available, updatedAt: now })
-        .where(eq(vendorFlavorAvailability.id, existingRow.vendor_flavor_availability.id))
+        .where(eq(vendorFlavorAvailability.id, existingRowId))
         .run();
     } else {
       await db
         .insert(vendorFlavorAvailability)
         .values({ vendorId, flavorId: flavor.id, weightId, available: entry.available, updatedAt: now })
         .run();
+      // Query for the newly inserted row to track it
+      const newRow = await db
+        .select({ id: vendorFlavorAvailability.id })
+        .from(vendorFlavorAvailability)
+        .where(
+          and(
+            eq(vendorFlavorAvailability.vendorId, vendorId),
+            eq(vendorFlavorAvailability.flavorId, flavor.id),
+            eq(vendorFlavorAvailability.weightId, weightId)
+          )
+        )
+        .get();
+      if (newRow) {
+        rowsByFlavorId.set(flavor.id, newRow.id);
+      }
     }
-    result.push({ flavorId: flavor.id, flavorName: entry.name, available: entry.available });
+    // Only add to result if not already seen in this upload (deduplicate)
+    resultMap.set(flavor.id, { flavorId: flavor.id, flavorName: entry.name, available: entry.available });
   }
 
   for (const row of existingForTriple) {
@@ -60,11 +81,11 @@ export async function replaceAvailability(
         .set({ available: false, updatedAt: now })
         .where(eq(vendorFlavorAvailability.id, row.vendor_flavor_availability.id))
         .run();
-      result.push({ flavorId: fid, flavorName: row.flavors.name, available: false });
+      resultMap.set(fid, { flavorId: fid, flavorName: row.flavors.name, available: false });
     }
   }
 
-  return result;
+  return Array.from(resultMap.values());
 }
 
 export async function isAvailable(db: Db, vendorId: number, flavorId: number, weightId: number) {

@@ -77,4 +77,57 @@ describe('availability domain', () => {
     const rows = await listVendorAssortment(db, vendor.id, { onlyAvailable: true });
     expect(rows.map((r) => r.flavorName)).toEqual(['CyberKiwi']);
   });
+
+  it('duplicate flavor names in one upload create only one row', async () => {
+    const { db, vendor, brand, w250 } = await setup();
+    const result = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: brand.id,
+      weightId: w250.id,
+      entries: [
+        { name: 'CyberKiwi', available: true },
+        { name: 'CyberKiwi', available: true },
+      ],
+    });
+    const cyberKiwiEntries = result.filter((r) => r.flavorName === 'CyberKiwi');
+    expect(cyberKiwiEntries).toHaveLength(1);
+    const assortment = await listVendorAssortment(db, vendor.id);
+    const cyberKiwiRows = assortment.filter((r) => r.flavorName === 'CyberKiwi');
+    expect(cyberKiwiRows).toHaveLength(1);
+  });
+
+  it('cross-brand isolation: replacing brand X availability does not affect brand Y', async () => {
+    const { db, vendor, w250 } = await setup();
+    const brand1 = await createBrand(db, 'Brand1');
+    const brand2 = await createBrand(db, 'Brand2');
+
+    // Upload availability for brand1
+    await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: brand1.id,
+      weightId: w250.id,
+      entries: [{ name: 'Flavor1', available: true }],
+    });
+
+    // Upload availability for brand2
+    await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: brand2.id,
+      weightId: w250.id,
+      entries: [{ name: 'Flavor2', available: true }],
+    });
+
+    // Verify brand1's availability is unchanged
+    const assortment = await listVendorAssortment(db, vendor.id);
+    const brand1Rows = assortment.filter((r) => r.brandId === brand1.id);
+    const brand2Rows = assortment.filter((r) => r.brandId === brand2.id);
+
+    expect(brand1Rows).toHaveLength(1);
+    expect(brand1Rows[0].flavorName).toBe('Flavor1');
+    expect(brand1Rows[0].available).toBe(true);
+
+    expect(brand2Rows).toHaveLength(1);
+    expect(brand2Rows[0].flavorName).toBe('Flavor2');
+    expect(brand2Rows[0].available).toBe(true);
+  });
 });
