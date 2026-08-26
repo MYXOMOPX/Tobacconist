@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { roundPayments, users } from '../db/schema';
+import { roundPayments } from '../db/schema';
 
 export async function setPaymentStatus(
   db: Db,
@@ -34,14 +34,4 @@ export async function getPaymentStatus(db: Db, roundId: number, userId: number) 
     .where(and(eq(roundPayments.roundId, roundId), eq(roundPayments.userId, userId)))
     .get();
   return row?.paid ?? false;
-}
-
-export async function listPayments(db: Db, roundId: number) {
-  const rows = await db
-    .select({ userId: roundPayments.userId, displayName: users.displayName, paid: roundPayments.paid })
-    .from(roundPayments)
-    .innerJoin(users, eq(users.id, roundPayments.userId))
-    .where(eq(roundPayments.roundId, roundId))
-    .all();
-  return rows;
 }

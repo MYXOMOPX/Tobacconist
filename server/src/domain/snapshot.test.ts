@@ -3,9 +3,9 @@ import type { AggregateLine } from './summary';
 import { buildTextSnapshot, buildTableSnapshot } from './snapshot';
 
 const lines: AggregateLine[] = [
-  { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 3, totalEur: 15 },
-  { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 2, grams: 100, quantity: 2, totalEur: 4 },
-  { brandId: 2, brandName: 'Chabacco', flavorId: 2, flavorName: 'Lemon Pie', weightId: 1, grams: 250, quantity: 1, totalEur: 5 },
+  { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 3, totalEur: 15, available: true },
+  { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 2, grams: 100, quantity: 2, totalEur: 4, available: true },
+  { brandId: 2, brandName: 'Chabacco', flavorId: 2, flavorName: 'Lemon Pie', weightId: 1, grams: 250, quantity: 1, totalEur: 5, available: false },
 ];
 
 describe('buildTextSnapshot', () => {

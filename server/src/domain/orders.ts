@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { orderItems } from '../db/schema';
-import { getRound } from './rounds';
+import { getRound, getRoundPriceSnapshot } from './rounds';
 import { isAvailable } from './availability';
 
 export type OrderItemRow = typeof orderItems.$inferSelect;
@@ -25,6 +25,13 @@ export async function upsertOrderItem(
 
   const available = await isAvailable(db, round.vendorId, flavorId, weightId);
   if (!available) throw new Error('this flavor/weight is not available for the round vendor');
+
+  // Without a price snapshot for this brand, summary/snapshot/close would throw for
+  // the whole round (see summary.ts) — reject just this order attempt instead.
+  if (quantity > 0) {
+    const pricePerKg = await getRoundPriceSnapshot(db, roundId, brandId);
+    if (pricePerKg === null) throw new Error('no price set for this brand yet');
+  }
 
   const existing = await db
     .select()

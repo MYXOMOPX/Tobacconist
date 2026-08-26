@@ -30,6 +30,8 @@ export type AggregateLineDto = {
   grams: number;
   quantity: number;
   totalEur: number;
+  /** False when the (flavor, weight) pair is no longer stocked by the round's vendor. */
+  available: boolean;
 };
 
 export type UserSummaryDto = {

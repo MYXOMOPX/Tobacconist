@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../../db/client';
+import { runInTransaction, type Db } from '../../db/client';
 import { vendors } from '../../db/schema';
 import { requireAdmin } from '../middleware/authenticate';
 import { openRound, closeRound, reopenRound, getActiveRound, getRound, type Round } from '../../domain/rounds';
 import { generateOrUpdateChecklist } from '../../domain/checklist';
+import type { RoundAnnouncer } from '../../telegram/notify';
 
 export async function toRoundDto(db: Db, round: Round) {
   const vendor = await db.select().from(vendors).where(eq(vendors.id, round.vendorId)).get();
@@ -18,7 +19,7 @@ export async function toRoundDto(db: Db, round: Round) {
   };
 }
 
-export function roundsRoutes(db: Db) {
+export function roundsRoutes(db: Db, roundAnnouncer: RoundAnnouncer) {
   return async function routes(api: FastifyInstance) {
     api.get('/active', async () => {
       const round = await getActiveRound(db);
@@ -36,7 +37,10 @@ export function roundsRoutes(db: Db) {
 
     api.post<{ Body: { vendorId: number } }>('/', { preHandler: requireAdmin }, async (req, reply) => {
       const round = await openRound(db, req.body.vendorId, req.authedUser!.id);
-      reply.code(201).send(await toRoundDto(db, round));
+      const dto = await toRoundDto(db, round);
+      // Spec §5: both round-start entry points announce in the group chat.
+      await roundAnnouncer.announceRoundOpened(dto.vendorName);
+      reply.code(201).send(dto);
     });
 
     api.post<{ Params: { roundId: string } }>(
@@ -44,8 +48,12 @@ export function roundsRoutes(db: Db) {
       { preHandler: requireAdmin },
       async (req) => {
         const roundId = Number(req.params.roundId);
-        await closeRound(db, roundId);
-        await generateOrUpdateChecklist(db, roundId);
+        // Atomic: if checklist generation fails, the status flip is rolled back too,
+        // so the round stays open and the close attempt is cleanly retryable.
+        await runInTransaction(db, async () => {
+          await closeRound(db, roundId);
+          await generateOrUpdateChecklist(db, roundId);
+        });
         return toRoundDto(db, (await getRound(db, roundId))!);
       }
     );

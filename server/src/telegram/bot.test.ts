@@ -80,8 +80,9 @@ describe('handleStartRoundCallback', () => {
     expect(round?.vendorId).toBe(vendor.id);
     expect(ctx.editMessageText).toHaveBeenCalledTimes(1);
     expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
-    const [chatId, , opts] = ctx.api.sendMessage.mock.calls[0];
+    const [chatId, text, opts] = ctx.api.sendMessage.mock.calls[0];
     expect(chatId).toBe(GROUP_ID);
+    expect(text).toContain('Vasya');
     expect(opts.reply_markup.inline_keyboard[0][0]).toEqual({
       text: '🛍 Заказать',
       web_app: { url: MINI_APP_URL },

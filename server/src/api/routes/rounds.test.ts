@@ -1,18 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { createTestDb, schema } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
 import { upsertOrderItem } from '../../domain/orders';
+import { getRound } from '../../domain/rounds';
 import { listChecklist } from '../../domain/checklist';
 import { roundsRoutes } from './rounds';
 import type { AuthedUser } from '../middleware/authenticate';
+import type { RoundAnnouncer } from '../../telegram/notify';
 
 const admin: AuthedUser = { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
 const member: AuthedUser = { id: 2, telegramId: '2', displayName: 'Friend', role: 'member' };
 
-function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
+function testApp(
+  user: AuthedUser,
+  db: ReturnType<typeof createTestDb>,
+  roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() }
+) {
   const app = Fastify();
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
@@ -20,7 +26,7 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   app.setErrorHandler((err, req, reply) => {
     reply.code(400).send({ error: (err as Error).message });
   });
-  app.register(roundsRoutes(db), { prefix: '/api/rounds' });
+  app.register(roundsRoutes(db, roundAnnouncer), { prefix: '/api/rounds' });
   return app;
 }
 
@@ -68,6 +74,30 @@ describe('rounds routes', () => {
     expect(active.json().status).toBe('open');
   });
 
+  it('announces the opened round in the group chat (spec §5, Mini App entry point)', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() };
+    const app = testApp(admin, db, roundAnnouncer);
+
+    const create = await app.inject({ method: 'POST', url: '/api/rounds', payload: { vendorId: vendor.id } });
+    expect(create.statusCode).toBe(201);
+    expect(roundAnnouncer.announceRoundOpened).toHaveBeenCalledTimes(1);
+    expect(roundAnnouncer.announceRoundOpened).toHaveBeenCalledWith('Vasya');
+  });
+
+  it('does not announce when opening a round fails', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() };
+    const app = testApp(admin, db, roundAnnouncer);
+
+    await app.inject({ method: 'POST', url: '/api/rounds', payload: { vendorId: vendor.id } });
+    const second = await app.inject({ method: 'POST', url: '/api/rounds', payload: { vendorId: vendor.id } });
+    expect(second.statusCode).toBe(400);
+    expect(roundAnnouncer.announceRoundOpened).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects opening a round as a non-admin with 403', async () => {
     const db = createTestDb();
     const { vendor } = await seedVendorWithStock(db);
@@ -100,5 +130,40 @@ describe('rounds routes', () => {
 
     const checklist = await listChecklist(db, roundId);
     expect(checklist).toEqual([expect.objectContaining({ expectedQty: 4, receivedQty: 0 })]);
+  });
+
+  it('rolls back the close when checklist generation fails, leaving the round open', async () => {
+    const db = createTestDb();
+    const { vendor, w250 } = await seedVendorWithStock(db);
+    const app = testApp(admin, db);
+    const create = await app.inject({ method: 'POST', url: '/api/rounds', payload: { vendorId: vendor.id } });
+    const roundId = create.json().id;
+
+    // Construct a state that makes generateOrUpdateChecklist throw: an order line for a
+    // brand with no price snapshot (summary.ts throws rather than charging 0 EUR).
+    // Inserted directly, since upsertOrderItem now rejects exactly this.
+    const unpricedBrand = await createBrand(db, 'NoPrice');
+    const [{ flavorId: unpricedFlavorId }] = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: unpricedBrand.id,
+      weightId: w250.id,
+      entries: [{ name: 'Mystery', available: true }],
+    });
+    const now = new Date().toISOString();
+    await db
+      .insert(schema.orderItems)
+      .values({ roundId, userId: admin.id, brandId: unpricedBrand.id, flavorId: unpricedFlavorId, weightId: w250.id, quantity: 1, createdAt: now, updatedAt: now })
+      .run();
+
+    const close = await app.inject({ method: 'POST', url: `/api/rounds/${roundId}/close` });
+    expect(close.statusCode).toBe(400);
+    expect(close.json().error).toMatch(/missing price snapshot/i);
+
+    // The status flip must have been rolled back — the round is still open and retryable.
+    expect((await getRound(db, roundId))!.status).toBe('open');
+    expect(await listChecklist(db, roundId)).toEqual([]);
+
+    const active = await app.inject({ method: 'GET', url: '/api/rounds/active' });
+    expect(active.json()?.id).toBe(roundId);
   });
 });

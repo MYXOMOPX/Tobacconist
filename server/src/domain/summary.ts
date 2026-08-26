@@ -1,6 +1,6 @@
 import type { Db } from '../db/client';
 import { brands, flavors, weights } from '../db/schema';
-import { listUserOrderItems, listRoundOrderItems, type OrderItemRow } from './orders';
+import { listUserOrderItems, listRoundOrderItems } from './orders';
 import { getRound, getRoundPriceSnapshot } from './rounds';
 import { isAvailable } from './availability';
 import { packPriceEur } from './catalog';
@@ -14,6 +14,8 @@ export type AggregateLine = {
   grams: number;
   quantity: number;
   totalEur: number;
+  /** False when the (flavor, weight) pair is no longer stocked by the round's vendor. */
+  available: boolean;
 };
 
 async function nameLookups(db: Db) {
@@ -32,6 +34,7 @@ async function nameLookups(db: Db) {
 async function buildLines(
   db: Db,
   roundId: number,
+  vendorId: number,
   items: { brandId: number; flavorId: number; weightId: number; quantity: number }[]
 ): Promise<AggregateLine[]> {
   const lookup = await nameLookups(db);
@@ -52,6 +55,7 @@ async function buildLines(
       grams,
       quantity: item.quantity,
       totalEur: Math.round(unitPrice * item.quantity * 100) / 100,
+      available: await isAvailable(db, vendorId, item.flavorId, item.weightId),
     });
   }
   return lines;
@@ -67,18 +71,14 @@ export async function computeUserSummary(db: Db, roundId: number, userId: number
   const round = await getRound(db, roundId);
   if (!round) throw new Error('round not found');
   const items = await listUserOrderItems(db, roundId, userId);
-  const lines = await buildLines(db, roundId, items);
-  let hasUnavailableItems = false;
-  for (const item of items as OrderItemRow[]) {
-    if (!(await isAvailable(db, round.vendorId, item.flavorId, item.weightId))) {
-      hasUnavailableItems = true;
-      break;
-    }
-  }
+  const lines = await buildLines(db, roundId, round.vendorId, items);
+  const hasUnavailableItems = lines.some((l) => !l.available);
   return { items: lines, ...totals(lines), hasUnavailableItems };
 }
 
 export async function computeAggregateSummary(db: Db, roundId: number) {
+  const round = await getRound(db, roundId);
+  if (!round) throw new Error('round not found');
   const items = await listRoundOrderItems(db, roundId);
   const grouped = new Map<string, { brandId: number; flavorId: number; weightId: number; quantity: number }>();
   for (const item of items) {
@@ -87,6 +87,6 @@ export async function computeAggregateSummary(db: Db, roundId: number) {
     if (existing) existing.quantity += item.quantity;
     else grouped.set(key, { brandId: item.brandId, flavorId: item.flavorId, weightId: item.weightId, quantity: item.quantity });
   }
-  const lines = await buildLines(db, roundId, [...grouped.values()]);
+  const lines = await buildLines(db, roundId, round.vendorId, [...grouped.values()]);
   return { lines, ...totals(lines) };
 }

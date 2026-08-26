@@ -5,6 +5,7 @@ import type { Db } from '../db/client';
 import { users } from '../db/schema';
 import { listVendors } from '../domain/vendors';
 import { openRound, type Round } from '../domain/rounds';
+import { createRoundAnnouncer } from './notify';
 
 export interface StartRoundCtx {
   from?: { id: number };
@@ -76,12 +77,14 @@ export async function handleStartRoundCallback(
     const adminUser = await ensureAdminUser(deps.db, deps.adminTelegramId);
     const round = await openRound(deps.db, vendorId, adminUser.id);
 
+    const vendor = (await listVendors(deps.db, { includeArchived: true })).find((v) => v.id === vendorId);
+
     await ctx.editMessageText('Раунд начат ✅');
-    await ctx.api.sendMessage(deps.groupChatId, '🛍 Заказ открыт! Жми, чтобы сформировать свой заказ:', {
-      reply_markup: {
-        inline_keyboard: [[{ text: '🛍 Заказать', web_app: { url: deps.miniAppUrl } }]],
-      },
-    });
+    await createRoundAnnouncer({
+      sender: ctx.api,
+      groupChatId: deps.groupChatId,
+      miniAppUrl: deps.miniAppUrl,
+    }).announceRoundOpened(vendor?.name ?? '');
 
     return round;
   } catch (err) {

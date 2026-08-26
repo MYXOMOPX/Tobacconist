@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   telegram_id TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL,
@@ -6,30 +6,30 @@ CREATE TABLE users (
   first_seen_at TEXT NOT NULL
 );
 
-CREATE TABLE weights (
+CREATE TABLE IF NOT EXISTS weights (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   grams INTEGER NOT NULL UNIQUE
 );
 
-CREATE TABLE brands (
+CREATE TABLE IF NOT EXISTS brands (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE flavors (
+CREATE TABLE IF NOT EXISTS flavors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   brand_id INTEGER NOT NULL REFERENCES brands(id),
   name TEXT NOT NULL,
   UNIQUE(brand_id, name)
 );
 
-CREATE TABLE vendors (
+CREATE TABLE IF NOT EXISTS vendors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE vendor_brand_prices (
+CREATE TABLE IF NOT EXISTS vendor_brand_prices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vendor_id INTEGER NOT NULL REFERENCES vendors(id),
   brand_id INTEGER NOT NULL REFERENCES brands(id),
@@ -37,7 +37,7 @@ CREATE TABLE vendor_brand_prices (
   UNIQUE(vendor_id, brand_id)
 );
 
-CREATE TABLE vendor_flavor_availability (
+CREATE TABLE IF NOT EXISTS vendor_flavor_availability (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vendor_id INTEGER NOT NULL REFERENCES vendors(id),
   flavor_id INTEGER NOT NULL REFERENCES flavors(id),
@@ -48,7 +48,7 @@ CREATE TABLE vendor_flavor_availability (
   UNIQUE(vendor_id, flavor_id, weight_id)
 );
 
-CREATE TABLE availability_uploads (
+CREATE TABLE IF NOT EXISTS availability_uploads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vendor_id INTEGER NOT NULL REFERENCES vendors(id),
   brand_id INTEGER NOT NULL REFERENCES brands(id),
@@ -58,7 +58,7 @@ CREATE TABLE availability_uploads (
   created_at TEXT NOT NULL
 );
 
-CREATE TABLE purchase_rounds (
+CREATE TABLE IF NOT EXISTS purchase_rounds (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vendor_id INTEGER NOT NULL REFERENCES vendors(id),
   status TEXT NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE purchase_rounds (
   opened_by_user_id INTEGER NOT NULL REFERENCES users(id)
 );
 
-CREATE TABLE round_brand_price_snapshots (
+CREATE TABLE IF NOT EXISTS round_brand_price_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   round_id INTEGER NOT NULL REFERENCES purchase_rounds(id),
   brand_id INTEGER NOT NULL REFERENCES brands(id),
@@ -75,7 +75,7 @@ CREATE TABLE round_brand_price_snapshots (
   UNIQUE(round_id, brand_id)
 );
 
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   round_id INTEGER NOT NULL REFERENCES purchase_rounds(id),
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -88,7 +88,7 @@ CREATE TABLE order_items (
   UNIQUE(round_id, user_id, brand_id, flavor_id, weight_id)
 );
 
-CREATE TABLE round_payments (
+CREATE TABLE IF NOT EXISTS round_payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   round_id INTEGER NOT NULL REFERENCES purchase_rounds(id),
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -98,7 +98,7 @@ CREATE TABLE round_payments (
   UNIQUE(round_id, user_id)
 );
 
-CREATE TABLE delivery_checklist_items (
+CREATE TABLE IF NOT EXISTS delivery_checklist_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   round_id INTEGER NOT NULL REFERENCES purchase_rounds(id),
   brand_id INTEGER NOT NULL REFERENCES brands(id),
@@ -109,4 +109,4 @@ CREATE TABLE delivery_checklist_items (
   UNIQUE(round_id, brand_id, flavor_id, weight_id)
 );
 
-INSERT INTO weights (grams) VALUES (100), (250);
+INSERT OR IGNORE INTO weights (grams) VALUES (100), (250);

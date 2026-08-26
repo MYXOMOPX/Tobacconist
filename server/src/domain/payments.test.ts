@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
 import { users, vendors, purchaseRounds } from '../db/schema';
-import { setPaymentStatus, getPaymentStatus, listPayments } from './payments';
+import { setPaymentStatus, getPaymentStatus } from './payments';
 
 async function setup() {
   const db = createTestDb();
@@ -24,12 +24,5 @@ describe('payments domain', () => {
     expect(await getPaymentStatus(db, round.id, friend.id)).toBe(true);
     await setPaymentStatus(db, round.id, friend.id, false, admin.id);
     expect(await getPaymentStatus(db, round.id, friend.id)).toBe(false);
-  });
-
-  it('listPayments returns display names alongside paid status', async () => {
-    const { db, admin, friend, round } = await setup();
-    await setPaymentStatus(db, round.id, friend.id, true, admin.id);
-    const rows = await listPayments(db, round.id);
-    expect(rows).toEqual([{ userId: friend.id, displayName: 'Friend', paid: true }]);
   });
 });

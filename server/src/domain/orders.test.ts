@@ -94,6 +94,33 @@ describe('orders domain', () => {
     expect(await listUserOrderItems(db, round.id, member.id)).toHaveLength(0);
   });
 
+  it('rejects orders for a brand with availability but no price snapshot', async () => {
+    const { db, member, vendor, round } = await setup();
+    // Second brand: availability set up, but setVendorBrandPrice never called, so
+    // openRound snapshotted no price for it.
+    const unpricedBrand = await createBrand(db, 'MustHave');
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+    const [{ flavorId: unpricedFlavorId }] = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: unpricedBrand.id,
+      weightId: w250.id,
+      entries: [{ name: 'Virginia', available: true }],
+    });
+
+    await expect(
+      upsertOrderItem(db, {
+        roundId: round.id,
+        userId: member.id,
+        brandId: unpricedBrand.id,
+        flavorId: unpricedFlavorId,
+        weightId: w250.id,
+        quantity: 1,
+      })
+    ).rejects.toThrow(/no price set for this brand/i);
+
+    expect(await listUserOrderItems(db, round.id, member.id)).toHaveLength(0);
+  });
+
   it('listRoundOrderItems returns items across all users', async () => {
     const { db, admin, member, brand, w250, flavorId, round } = await setup();
     await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
