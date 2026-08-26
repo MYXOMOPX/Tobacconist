@@ -7,8 +7,10 @@ import { catalogRoutes } from './routes/catalog';
 import { availabilityRoutes } from './routes/availability';
 import { roundsRoutes } from './routes/rounds';
 import { ordersRoutes } from './routes/orders';
+import { snapshotRoutes } from './routes/snapshot';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/availabilityParser';
+import type { DocumentSender } from '../telegram/notify';
 
 export function buildApp(deps: {
   db: Db;
@@ -18,6 +20,7 @@ export function buildApp(deps: {
   chatMemberApi: ChatMemberApi;
   geminiClient: GeminiClient;
   uploadsDir: string;
+  documentSender: DocumentSender;
   miniAppDistPath?: string;
   onApiReady?: (api: FastifyInstance) => Promise<void>;
 }): FastifyInstance {
@@ -56,6 +59,7 @@ export function buildApp(deps: {
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
       api.register(roundsRoutes(deps.db), { prefix: '/rounds' });
       api.register(ordersRoutes(deps.db), { prefix: '/orders' });
+      api.register(snapshotRoutes(deps.db, deps.documentSender), { prefix: '/rounds/:roundId/snapshot' });
     },
     { prefix: '/api' }
   );
