@@ -5,6 +5,7 @@ import type { Db } from '../db/client';
 import { createAuthenticate } from './middleware/authenticate';
 import { catalogRoutes } from './routes/catalog';
 import { availabilityRoutes } from './routes/availability';
+import { roundsRoutes } from './routes/rounds';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/availabilityParser';
 
@@ -20,6 +21,13 @@ export function buildApp(deps: {
   onApiReady?: (api: FastifyInstance) => Promise<void>;
 }): FastifyInstance {
   const app = Fastify({ logger: true });
+  app.setErrorHandler((err, req, reply) => {
+    if (err.statusCode) {
+      reply.code(err.statusCode).send({ error: err.message });
+      return;
+    }
+    reply.code(400).send({ error: err.message });
+  });
   app.register(multipart);
 
   if (deps.miniAppDistPath) {
@@ -45,6 +53,7 @@ export function buildApp(deps: {
       }
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
+      api.register(roundsRoutes(deps.db), { prefix: '/rounds' });
     },
     { prefix: '/api' }
   );
