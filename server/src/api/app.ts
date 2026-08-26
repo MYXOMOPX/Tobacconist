@@ -3,6 +3,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import type { Db } from '../db/client';
 import { createAuthenticate } from './middleware/authenticate';
+import { catalogRoutes } from './routes/catalog';
 import type { ChatMemberApi } from '../telegram/auth';
 
 export function buildApp(deps: {
@@ -38,7 +39,7 @@ export function buildApp(deps: {
       if (deps.onApiReady) {
         await deps.onApiReady(api);
       }
-      // route plugins are registered here by Tasks 15-21
+      api.register(catalogRoutes(deps.db), { prefix: '/admin' });
     },
     { prefix: '/api' }
   );
