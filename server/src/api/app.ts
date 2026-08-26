@@ -58,6 +58,7 @@ export function buildApp(deps: {
       if (deps.onApiReady) {
         await deps.onApiReady(api);
       }
+      api.get('/me', async (req) => req.authedUser);
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
       api.register(roundsRoutes(deps.db), { prefix: '/rounds' });
