@@ -42,12 +42,22 @@ export interface StartRoundCallbackCtx {
 async function ensureAdminUser(db: Db, adminTelegramId: string) {
   const existing = await db.select().from(users).where(eq(users.telegramId, adminTelegramId)).get();
   if (existing) return existing;
-  const [row] = await db
-    .insert(users)
-    .values({ telegramId: adminTelegramId, displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() })
-    .returning()
-    .all();
-  return row;
+  try {
+    const [row] = await db
+      .insert(users)
+      .values({ telegramId: adminTelegramId, displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() })
+      .returning()
+      .all();
+    return row;
+  } catch (err) {
+    // Handle race condition: another request may have inserted the same user concurrently
+    // Re-select the now-existing row
+    const reselect = await db.select().from(users).where(eq(users.telegramId, adminTelegramId)).get();
+    if (!reselect) {
+      throw err; // Not a duplicate key error, re-throw
+    }
+    return reselect;
+  }
 }
 
 export async function handleStartRoundCallback(
@@ -60,18 +70,24 @@ export async function handleStartRoundCallback(
   const match = ctx.callbackQuery?.data?.match(/^start_round:(\d+)$/);
   if (!match) return undefined;
 
-  const vendorId = Number(match[1]);
-  const adminUser = await ensureAdminUser(deps.db, deps.adminTelegramId);
-  const round = await openRound(deps.db, vendorId, adminUser.id);
+  try {
+    const vendorId = Number(match[1]);
+    const adminUser = await ensureAdminUser(deps.db, deps.adminTelegramId);
+    const round = await openRound(deps.db, vendorId, adminUser.id);
 
-  await ctx.editMessageText('Раунд начат ✅');
-  await ctx.api.sendMessage(deps.groupChatId, '🛍 Заказ открыт! Жми, чтобы сформировать свой заказ:', {
-    reply_markup: {
-      inline_keyboard: [[{ text: '🛍 Заказать', web_app: { url: deps.miniAppUrl } }]],
-    },
-  });
+    await ctx.editMessageText('Раунд начат ✅');
+    await ctx.api.sendMessage(deps.groupChatId, '🛍 Заказ открыт! Жми, чтобы сформировать свой заказ:', {
+      reply_markup: {
+        inline_keyboard: [[{ text: '🛍 Заказать', web_app: { url: deps.miniAppUrl } }]],
+      },
+    });
 
-  return round;
+    return round;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to start round';
+    await ctx.editMessageText(`Ошибка: ${message}`);
+    return undefined;
+  }
 }
 
 export function createBot(deps: {

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createTestDb } from '../db/client';
 import { createVendor } from '../domain/vendors';
-import { getActiveRound } from '../domain/rounds';
+import { getActiveRound, openRound } from '../domain/rounds';
+import { users } from '../db/schema';
 import { handleStartRoundCommand, handleStartRoundCallback } from './bot';
 
 const ADMIN_ID = '555';
@@ -85,5 +86,35 @@ describe('handleStartRoundCallback', () => {
       text: '🛍 Заказать',
       web_app: { url: MINI_APP_URL },
     });
+  });
+
+  it('handles openRound throwing "already open" error gracefully', async () => {
+    const db = createTestDb();
+    const vendor1 = await createVendor(db, 'Vasya');
+    const vendor2 = await createVendor(db, 'Petya');
+
+    // Create an admin user and open a round directly to simulate an existing open round
+    const [admin] = await db
+      .insert(users)
+      .values({ telegramId: ADMIN_ID, displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() })
+      .returning()
+      .all();
+    await openRound(db, vendor1.id, admin.id);
+
+    // Now try to open another round via the callback
+    const ctx = fakeCallbackCtx(555, `start_round:${vendor2.id}`);
+    const result = await handleStartRoundCallback(ctx, {
+      db,
+      adminTelegramId: ADMIN_ID,
+      groupChatId: GROUP_ID,
+      miniAppUrl: MINI_APP_URL,
+    });
+
+    // Should not throw, should return undefined, and should edit message with error
+    expect(result).toBeUndefined();
+    expect(ctx.editMessageText).toHaveBeenCalledTimes(1);
+    const errorMessage = ctx.editMessageText.mock.calls[0][0];
+    expect(errorMessage).toContain('Ошибка');
+    expect(errorMessage).toContain('already open');
   });
 });
