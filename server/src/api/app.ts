@@ -6,6 +6,7 @@ import { createAuthenticate } from './middleware/authenticate';
 import { catalogRoutes } from './routes/catalog';
 import { availabilityRoutes } from './routes/availability';
 import { roundsRoutes } from './routes/rounds';
+import { ordersRoutes } from './routes/orders';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/availabilityParser';
 
@@ -54,6 +55,7 @@ export function buildApp(deps: {
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
       api.register(roundsRoutes(deps.db), { prefix: '/rounds' });
+      api.register(ordersRoutes(deps.db), { prefix: '/orders' });
     },
     { prefix: '/api' }
   );
