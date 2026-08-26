@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import type { Db } from '../../db/client';
 import { purchaseRounds, orderItems } from '../../db/schema';
 import { getRound } from '../../domain/rounds';
@@ -22,10 +22,25 @@ export function historyRoutes(db: Db) {
       return dtos.filter((d) => myRoundIds.has(d.id));
     });
 
-    api.get<{ Params: { roundId: string } }>('/:roundId', async (req) => {
+    api.get<{ Params: { roundId: string } }>('/:roundId', async (req, reply) => {
       const roundId = Number(req.params.roundId);
       const round = await getRound(db, roundId);
-      if (!round) throw new Error('round not found');
+      if (!round || round.status !== 'closed') {
+        reply.code(404).send({ error: 'round not found' });
+        return;
+      }
+      // For non-admins, check if they have at least one order item in this round
+      if (req.authedUser!.role !== 'admin') {
+        const userOrderItems = await db
+          .select()
+          .from(orderItems)
+          .where(and(eq(orderItems.roundId, roundId), eq(orderItems.userId, req.authedUser!.id)))
+          .all();
+        if (userOrderItems.length === 0) {
+          reply.code(404).send({ error: 'round not found' });
+          return;
+        }
+      }
       const summary = await computeUserSummary(db, roundId, req.authedUser!.id);
       const paid = await getPaymentStatus(db, roundId, req.authedUser!.id);
       return { round: await toRoundDto(db, round), ...summary, paid };
