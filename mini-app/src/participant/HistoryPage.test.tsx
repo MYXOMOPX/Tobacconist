@@ -29,6 +29,7 @@ describe('HistoryPage', () => {
     await user.click(await screen.findByText(/Vasya/));
 
     expect(await screen.findByText(/0.75 кг, 15.00 €/)).toBeInTheDocument();
-    expect(screen.getByText(/оплачено/)).toBeInTheDocument();
+    expect(screen.getByText(/— оплачено$/)).toBeInTheDocument();
+    expect(screen.queryByText(/не оплачено/)).not.toBeInTheDocument();
   });
 });
