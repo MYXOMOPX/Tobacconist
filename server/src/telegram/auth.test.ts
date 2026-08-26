@@ -50,7 +50,7 @@ describe('verifyInitData', () => {
   });
 
   it('rejects a wrong-length hash', () => {
-    const initData = buildInitData() + '&extra=data';
+    const initData = buildInitData();
     const parts = initData.split('&');
     const tampered = parts.map(p => {
       if (p.startsWith('hash=')) {
@@ -62,21 +62,36 @@ describe('verifyInitData', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('hardcoded HMAC vector: verifies known-good initData with fixed bot token', () => {
-    const FIXED_BOT_TOKEN = '123456:ABCDEF';
-    const recentAuthDate = String(Math.floor(Date.now() / 1000) - 3600);
-    const params = new URLSearchParams();
-    params.set('auth_date', recentAuthDate);
-    params.set('user', JSON.stringify({ id: 123, first_name: 'Test', last_name: 'User' }));
-    const pairs = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    const dataCheckString = pairs.map(([k, v]) => `${k}=${v}`).join('\n');
-    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(FIXED_BOT_TOKEN).digest();
-    const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    params.set('hash', expectedHash);
-    const initData = params.toString();
+  it('rejects a hash with trailing garbage characters', () => {
+    const initData = buildInitData();
+    const parts = initData.split('&');
+    const tampered = parts.map(p => {
+      if (p.startsWith('hash=')) {
+        return p + 'zzzz';
+      }
+      return p;
+    }).join('&');
+    const result = verifyInitData({ initData: tampered, botToken: BOT_TOKEN });
+    expect(result.ok).toBe(false);
+  });
 
-    const result = verifyInitData({ initData, botToken: FIXED_BOT_TOKEN });
-    expect(result).toEqual({ ok: true, telegramId: '123', displayName: 'Test User' });
+  it('hardcoded HMAC vector: verifies known-good initData with fixed bot token', () => {
+    // Hardcoded vector computed once with Node crypto:
+    // BOT_TOKEN: 123456:ABCDEF
+    // auth_date: 1600000000
+    // user: {"id":99,"first_name":"Alice","last_name":"Brown"}
+    // Computed hash: 08d39ca06c8d73977953ab3bcfe043f9bfc921593f9bc988fdf97709e374c60c
+    const FIXED_BOT_TOKEN = '123456:ABCDEF';
+    const HARDCODED_INIT_DATA = 'auth_date=1600000000&user=%7B%22id%22%3A99%2C%22first_name%22%3A%22Alice%22%2C%22last_name%22%3A%22Brown%22%7D&hash=08d39ca06c8d73977953ab3bcfe043f9bfc921593f9bc988fdf97709e374c60c';
+    const HARDCODED_HASH = '08d39ca06c8d73977953ab3bcfe043f9bfc921593f9bc988fdf97709e374c60c';
+    // Set 'now' to be 1 hour after the auth_date, well within the 24-hour window
+    const nowTime = new Date((1600000000 + 3600) * 1000);
+
+    const result = verifyInitData({ initData: HARDCODED_INIT_DATA, botToken: FIXED_BOT_TOKEN, now: nowTime });
+    expect(result).toEqual({ ok: true, telegramId: '99', displayName: 'Alice Brown' });
+    // Verify the hash is exactly what we hardcoded
+    const decoded = new URLSearchParams(HARDCODED_INIT_DATA);
+    expect(decoded.get('hash')).toBe(HARDCODED_HASH);
   });
 
   it('rejects an expired auth_date using injected clock', () => {
@@ -88,18 +103,25 @@ describe('verifyInitData', () => {
   });
 
   it('accepts auth_date at maxAgeSeconds boundary (just within)', () => {
-    const fixedAuthDate = Math.floor(Date.now() / 1000) - 86390;
+    // Fixed timestamp: auth_date is exactly at the maxAgeSeconds boundary
+    // Comparison: now - authDate > maxAgeSeconds?
+    // At boundary: 86400 - 86400 = 0, which is NOT > 86400, so should pass
+    const fixedAuthDate = 1600000000;
+    const maxAgeSeconds = 86400;
+    const nowAtBoundary = new Date((fixedAuthDate + maxAgeSeconds) * 1000);
     const initData = buildInitData({ authDate: fixedAuthDate });
-    const now = new Date();
-    const result = verifyInitData({ initData, botToken: BOT_TOKEN, maxAgeSeconds: 86400, now });
+    const result = verifyInitData({ initData, botToken: BOT_TOKEN, maxAgeSeconds, now: nowAtBoundary });
     expect(result.ok).toBe(true);
   });
 
   it('rejects auth_date at maxAgeSeconds boundary (just expired)', () => {
-    const fixedAuthDate = Math.floor(Date.now() / 1000) - 86410;
+    // Just past boundary: one second over maxAgeSeconds
+    // Comparison: 86401 - 0 = 86401, which IS > 86400, so should fail
+    const fixedAuthDate = 1600000000;
+    const maxAgeSeconds = 86400;
+    const nowPastBoundary = new Date((fixedAuthDate + maxAgeSeconds + 1) * 1000);
     const initData = buildInitData({ authDate: fixedAuthDate });
-    const now = new Date();
-    const result = verifyInitData({ initData, botToken: BOT_TOKEN, maxAgeSeconds: 86400, now });
+    const result = verifyInitData({ initData, botToken: BOT_TOKEN, maxAgeSeconds, now: nowPastBoundary });
     expect(result).toEqual({ ok: false, reason: 'expired' });
   });
 

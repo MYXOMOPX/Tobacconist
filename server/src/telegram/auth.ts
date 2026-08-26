@@ -4,6 +4,8 @@ export type InitDataResult =
   | { ok: true; telegramId: string; displayName: string }
   | { ok: false; reason: string };
 
+const ACTIVE_STATUSES = new Set(['creator', 'administrator', 'member']);
+
 export function verifyInitData(params: {
   initData: string;
   botToken: string;
@@ -15,6 +17,9 @@ export function verifyInitData(params: {
   const parsed = new URLSearchParams(initData);
   const hash = parsed.get('hash');
   if (!hash) return { ok: false, reason: 'missing hash' };
+  if (!/^[0-9a-f]{64}$/i.test(hash)) {
+    return { ok: false, reason: 'invalid signature' };
+  }
   parsed.delete('hash');
 
   const pairs = [...parsed.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -66,7 +71,6 @@ export async function checkGroupMembership(
 ): Promise<boolean> {
   try {
     const member = await api.getChatMember(groupChatId, telegramUserId);
-    const ACTIVE_STATUSES = new Set(['creator', 'administrator', 'member']);
     if (member.status === 'restricted') return member.is_member === true;
     return ACTIVE_STATUSES.has(member.status);
   } catch {
