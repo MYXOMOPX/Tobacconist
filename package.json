@@ -1,0 +1,9 @@
+{
+  "name": "tobacconist",
+  "private": true,
+  "workspaces": ["shared", "server", "mini-app"],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  }
+}
