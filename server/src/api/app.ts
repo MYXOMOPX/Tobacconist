@@ -9,6 +9,8 @@ import { roundsRoutes } from './routes/rounds';
 import { ordersRoutes } from './routes/orders';
 import { snapshotRoutes } from './routes/snapshot';
 import { checklistRoutes } from './routes/checklist';
+import { paymentsRoutes } from './routes/payments';
+import { historyRoutes } from './routes/history';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/client';
 import type { DocumentSender } from '../telegram/notify';
@@ -62,6 +64,8 @@ export function buildApp(deps: {
       api.register(ordersRoutes(deps.db), { prefix: '/orders' });
       api.register(snapshotRoutes(deps.db, deps.documentSender), { prefix: '/rounds/:roundId/snapshot' });
       api.register(checklistRoutes(deps.db), { prefix: '/rounds/:roundId/checklist' });
+      api.register(paymentsRoutes(deps.db), { prefix: '/rounds/:roundId/payments' });
+      api.register(historyRoutes(deps.db), { prefix: '/history' });
     },
     { prefix: '/api' }
   );

@@ -6,7 +6,7 @@ import { requireAdmin } from '../middleware/authenticate';
 import { openRound, closeRound, reopenRound, getActiveRound, getRound, type Round } from '../../domain/rounds';
 import { generateOrUpdateChecklist } from '../../domain/checklist';
 
-async function toRoundDto(db: Db, round: Round) {
+export async function toRoundDto(db: Db, round: Round) {
   const vendor = await db.select().from(vendors).where(eq(vendors.id, round.vendorId)).get();
   return {
     id: round.id,
