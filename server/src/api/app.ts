@@ -9,7 +9,7 @@ import { roundsRoutes } from './routes/rounds';
 import { ordersRoutes } from './routes/orders';
 import { snapshotRoutes } from './routes/snapshot';
 import type { ChatMemberApi } from '../telegram/auth';
-import type { GeminiClient } from '../gemini/availabilityParser';
+import type { GeminiClient } from '../gemini/client';
 import type { DocumentSender } from '../telegram/notify';
 
 export function buildApp(deps: {

@@ -6,7 +6,8 @@ import type { Db } from '../../db/client';
 import { availabilityUploads } from '../../db/schema';
 import { requireAdmin } from '../middleware/authenticate';
 import { replaceAvailability } from '../../domain/availability';
-import { parseAvailabilityImage, type GeminiClient } from '../../gemini/availabilityParser';
+import { parseAvailabilityImage } from '../../gemini/availabilityParser';
+import type { GeminiClient } from '../../gemini/client';
 
 type ParseFields = { vendorId?: number; brandId?: number; weightId?: number };
 
