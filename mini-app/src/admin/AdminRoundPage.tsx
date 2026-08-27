@@ -15,6 +15,7 @@ export function AdminRoundPage() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
+  const [startingNewRound, setStartingNewRound] = useState(false);
   const { error, run } = useAction();
 
   /** Loads a specific round by id — works for closed rounds too, unlike /rounds/active. */
@@ -68,6 +69,7 @@ export function AdminRoundPage() {
     return run(async () => {
       const created = await api.post<Round>('/rounds', { vendorId });
       await loadRoundById(created.id);
+      setStartingNewRound(false);
     });
   }
 
@@ -153,6 +155,25 @@ export function AdminRoundPage() {
         <button onClick={closeRound}>Закрыть раунд</button>
       ) : (
         <button onClick={reopenRound}>Переоткрыть раунд</button>
+      )}
+
+      {round.status === 'closed' && (
+        <div>
+          <h3>Новый раунд</h3>
+          {startingNewRound ? (
+            <ul>
+              {vendors
+                .filter((v) => !v.archived)
+                .map((v) => (
+                  <li key={v.id}>
+                    <button onClick={() => startRound(v.id)}>{v.name}</button>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <button onClick={() => setStartingNewRound(true)}>Начать новый раунд</button>
+          )}
+        </div>
       )}
 
       {snapshot && (

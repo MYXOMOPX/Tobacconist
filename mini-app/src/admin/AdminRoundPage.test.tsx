@@ -181,4 +181,44 @@ describe('AdminRoundPage — no open round but history exists', () => {
     // The older closed round must not be the one selected.
     expect(api.get).not.toHaveBeenCalledWith('/rounds/4');
   });
+
+  it('offers a way to start a brand new round without reopening the closed one', async () => {
+    const newOpenRound = { id: 6, vendorId: 2, vendorName: 'NewVendor', status: 'open', openedAt: '', closedAt: null };
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/rounds/active') return null;
+      if (path === '/history') return [closedRound];
+      if (path === '/rounds/5') return closedRound;
+      if (path === '/rounds/5/snapshot') return snapshot;
+      if (path === '/rounds/5/summaries') return summaries;
+      if (path === '/rounds/5/checklist') return checklist;
+      if (path === '/admin/vendors')
+        return [
+          { id: 1, name: 'Vasya', archived: false },
+          { id: 2, name: 'NewVendor', archived: false },
+        ];
+      if (path === '/rounds/6') return newOpenRound;
+      if (path === '/rounds/6/snapshot') return { text: '', table: [] };
+      if (path === '/rounds/6/summaries') return [];
+      return [];
+    });
+    vi.mocked(api.post).mockResolvedValue(newOpenRound);
+
+    const user = userEvent.setup();
+    render(<AdminRoundPage />);
+
+    // The closed round's checklist/reopen UI is visible first.
+    expect(await screen.findByText(/Раунд #5/)).toHaveTextContent('closed');
+    expect(screen.getByText('Сверка поставки')).toBeInTheDocument();
+    expect(screen.getByText('Переоткрыть раунд')).toBeInTheDocument();
+
+    // Starting a new round is a separate affordance, not the reopen button.
+    await user.click(screen.getByText('Начать новый раунд'));
+    await user.click(await screen.findByText('NewVendor'));
+
+    expect(api.post).toHaveBeenCalledWith('/rounds', { vendorId: 2 });
+    // Reuses the existing start-round success path (load-by-id).
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/rounds/6'));
+    expect(await screen.findByText(/Раунд #6/)).toHaveTextContent('open');
+    expect(screen.queryByText('Сверка поставки')).not.toBeInTheDocument();
+  });
 });
