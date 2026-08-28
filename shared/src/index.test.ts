@@ -24,6 +24,7 @@ describe('shared DTO types', () => {
       grams: 250,
       quantity: 3,
       totalEur: 15.75,
+      available: true,
     };
     expect(line.quantity).toBe(3);
   });
