@@ -1,10 +1,10 @@
 FROM node:20-slim AS build
 WORKDIR /app
-COPY package.json tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
 COPY mini-app/package.json mini-app/package.json
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npm run build --workspace=@tobacconist/shared
 RUN npm run build --workspace=@tobacconist/server
