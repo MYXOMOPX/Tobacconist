@@ -75,7 +75,7 @@ cd mini-app && npx tsc -p tsconfig.json --noEmit
 
 ## Деплой (Docker + Traefik)
 
-Сборка и деплой рассчитаны на VPS, где уже поднят Traefik как reverse-proxy с внешней Docker-сетью `traefik` и cert resolver'ом с именем `le`. Если у вас другие имена — поправьте `deploy/docker-compose.yml`.
+Сборка и деплой рассчитаны на VPS, где уже поднят Traefik как reverse-proxy с внешней Docker-сетью `containers-net` и cert resolver'ом с именем `le`. Если у вас другие имена — поправьте `deploy/docker-compose.yml`.
 
 1. Скопировать `deploy/.env.example` в `deploy/.env` и заполнить реальными значениями:
 

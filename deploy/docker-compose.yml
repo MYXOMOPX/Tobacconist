@@ -12,10 +12,10 @@ services:
       - "traefik.http.routers.tobacconist.tls.certresolver=le"
       - "traefik.http.services.tobacconist.loadbalancer.server.port=3000"
     networks:
-      - traefik
+      - containers-net
 
 networks:
-  traefik:
+  containers-net:
     external: true
 
 volumes:
