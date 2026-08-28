@@ -2,12 +2,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { Db } from '../../db/client';
-import { availabilityUploads } from '../../db/schema';
-import { requireAdmin } from '../middleware/authenticate';
-import { replaceAvailability } from '../../domain/availability';
-import { parseAvailabilityImage } from '../../gemini/availabilityParser';
-import type { GeminiClient } from '../../gemini/client';
+import type { Db } from '../../db/client.js';
+import { availabilityUploads } from '../../db/schema.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { replaceAvailability } from '../../domain/availability.js';
+import { parseAvailabilityImage } from '../../gemini/availabilityParser.js';
+import type { GeminiClient } from '../../gemini/client.js';
 
 type ParseFields = { vendorId?: number; brandId?: number; weightId?: number };
 

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { purchaseRounds, roundBrandPriceSnapshots, vendorBrandPrices } from '../db/schema';
+import type { Db } from '../db/client.js';
+import { purchaseRounds, roundBrandPriceSnapshots, vendorBrandPrices } from '../db/schema.js';
 
 export type Round = typeof purchaseRounds.$inferSelect;
 

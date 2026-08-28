@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../../db/client';
-import { users } from '../../db/schema';
-import { requireAdmin } from '../middleware/authenticate';
-import { listRoundOrderItems } from '../../domain/orders';
-import { setPaymentStatus, getPaymentStatus } from '../../domain/payments';
+import type { Db } from '../../db/client.js';
+import { users } from '../../db/schema.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { listRoundOrderItems } from '../../domain/orders.js';
+import { setPaymentStatus, getPaymentStatus } from '../../domain/payments.js';
 
 export function paymentsRoutes(db: Db) {
   return async function routes(api: FastifyInstance) {

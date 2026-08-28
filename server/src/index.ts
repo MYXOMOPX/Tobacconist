@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webhookCallback } from 'grammy';
-import { loadConfig, type Config } from './config';
-import { createDb } from './db/client';
-import { createGeminiClient } from './gemini/client';
-import { createBot } from './telegram/bot';
-import { createDocumentSender, createRoundAnnouncer } from './telegram/notify';
-import { buildApp } from './api/app';
+import { loadConfig, type Config } from './config.js';
+import { createDb } from './db/client.js';
+import { createGeminiClient } from './gemini/client.js';
+import { createBot } from './telegram/bot.js';
+import { createDocumentSender, createRoundAnnouncer } from './telegram/notify.js';
+import { buildApp } from './api/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

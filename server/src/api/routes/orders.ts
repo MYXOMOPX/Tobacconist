@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import type { Db } from '../../db/client';
-import { getActiveRound } from '../../domain/rounds';
-import { listVendorAssortment } from '../../domain/availability';
-import { upsertOrderItem } from '../../domain/orders';
-import { computeUserSummary } from '../../domain/summary';
+import type { Db } from '../../db/client.js';
+import { getActiveRound } from '../../domain/rounds.js';
+import { listVendorAssortment } from '../../domain/availability.js';
+import { upsertOrderItem } from '../../domain/orders.js';
+import { computeUserSummary } from '../../domain/summary.js';
 
 export function ordersRoutes(db: Db) {
   return async function routes(api: FastifyInstance) {

@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { vendorFlavorAvailability, flavors, brands, weights } from '../db/schema';
-import { findOrCreateFlavor } from './catalog';
+import type { Db } from '../db/client.js';
+import { vendorFlavorAvailability, flavors, brands, weights } from '../db/schema.js';
+import { findOrCreateFlavor } from './catalog.js';
 
 export async function replaceAvailability(
   db: Db,

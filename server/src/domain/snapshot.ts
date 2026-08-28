@@ -1,4 +1,4 @@
-import type { AggregateLine } from './summary';
+import type { AggregateLine } from './summary.js';
 
 function sortedLines(lines: AggregateLine[]): AggregateLine[] {
   return [...lines].sort((a, b) => {

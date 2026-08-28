@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../../db/client';
-import { users } from '../../db/schema';
-import { requireAdmin } from '../middleware/authenticate';
-import { listRoundOrderItems } from '../../domain/orders';
-import { computeUserSummary } from '../../domain/summary';
-import { getPaymentStatus } from '../../domain/payments';
+import type { Db } from '../../db/client.js';
+import { users } from '../../db/schema.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { listRoundOrderItems } from '../../domain/orders.js';
+import { computeUserSummary } from '../../domain/summary.js';
+import { getPaymentStatus } from '../../domain/payments.js';
 
 /**
  * Per-participant totals for one round (spec §9: the admin needs to see who owes

@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { weights, brands, flavors } from '../db/schema';
+import type { Db } from '../db/client.js';
+import { weights, brands, flavors } from '../db/schema.js';
 
 export function packPriceEur(pricePerKgEur: number, grams: number): number {
   return Math.round(pricePerKgEur * (grams / 1000) * 100) / 100;

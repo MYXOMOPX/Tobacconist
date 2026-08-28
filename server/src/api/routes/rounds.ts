@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import { runInTransaction, type Db } from '../../db/client';
-import { vendors } from '../../db/schema';
-import { requireAdmin } from '../middleware/authenticate';
-import { openRound, closeRound, reopenRound, getActiveRound, getRound, type Round } from '../../domain/rounds';
-import { generateOrUpdateChecklist } from '../../domain/checklist';
-import type { RoundAnnouncer } from '../../telegram/notify';
+import { runInTransaction, type Db } from '../../db/client.js';
+import { vendors } from '../../db/schema.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { openRound, closeRound, reopenRound, getActiveRound, getRound, type Round } from '../../domain/rounds.js';
+import { generateOrUpdateChecklist } from '../../domain/checklist.js';
+import type { RoundAnnouncer } from '../../telegram/notify.js';
 
 export async function toRoundDto(db: Db, round: Round) {
   const vendor = await db.select().from(vendors).where(eq(vendors.id, round.vendorId)).get();

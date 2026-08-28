@@ -1,14 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import type { Db } from '../../db/client';
-import { requireAdmin } from '../middleware/authenticate';
-import { getWeights, createBrand, listBrands } from '../../domain/catalog';
+import type { Db } from '../../db/client.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { getWeights, createBrand, listBrands } from '../../domain/catalog.js';
 import {
   createVendor,
   listVendors,
   archiveVendor,
   setVendorBrandPrice,
   getVendorBrandPrices,
-} from '../../domain/vendors';
+} from '../../domain/vendors.js';
 
 export function catalogRoutes(db: Db) {
   return async function routes(api: FastifyInstance) {

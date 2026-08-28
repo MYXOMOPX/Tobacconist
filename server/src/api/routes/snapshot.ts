@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import type { Db } from '../../db/client';
-import { requireAdmin } from '../middleware/authenticate';
-import { computeAggregateSummary } from '../../domain/summary';
-import { buildTextSnapshot, buildTableSnapshot } from '../../domain/snapshot';
-import { buildSnapshotWorkbook } from '../../domain/xlsx';
-import type { DocumentSender } from '../../telegram/notify';
+import type { Db } from '../../db/client.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { computeAggregateSummary } from '../../domain/summary.js';
+import { buildTextSnapshot, buildTableSnapshot } from '../../domain/snapshot.js';
+import { buildSnapshotWorkbook } from '../../domain/xlsx.js';
+import type { DocumentSender } from '../../telegram/notify.js';
 
 export function snapshotRoutes(db: Db, documentSender: DocumentSender) {
   return async function routes(api: FastifyInstance) {

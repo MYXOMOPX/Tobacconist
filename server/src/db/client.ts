@@ -4,7 +4,7 @@ import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as schema from './schema';
+import * as schema from './schema.js';
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
@@ -66,4 +66,4 @@ export async function runInTransaction<T>(db: Db, fn: () => Promise<T>): Promise
   }
 }
 
-export * as schema from './schema';
+export * as schema from './schema.js';

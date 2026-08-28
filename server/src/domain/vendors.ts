@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { vendors, vendorBrandPrices, brands } from '../db/schema';
+import type { Db } from '../db/client.js';
+import { vendors, vendorBrandPrices, brands } from '../db/schema.js';
 
 export async function createVendor(db: Db, name: string) {
   const [row] = await db.insert(vendors).values({ name }).returning().all();

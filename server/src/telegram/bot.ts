@@ -1,11 +1,11 @@
 import { Bot } from 'grammy';
 import type { UserFromGetMe } from 'grammy/types';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { users } from '../db/schema';
-import { listVendors } from '../domain/vendors';
-import { openRound, type Round } from '../domain/rounds';
-import { createRoundAnnouncer } from './notify';
+import type { Db } from '../db/client.js';
+import { users } from '../db/schema.js';
+import { listVendors } from '../domain/vendors.js';
+import { openRound, type Round } from '../domain/rounds.js';
+import { createRoundAnnouncer } from './notify.js';
 
 export interface StartRoundCtx {
   from?: { id: number };

@@ -1,8 +1,8 @@
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { orderItems } from '../db/schema';
-import { getRound, getRoundPriceSnapshot } from './rounds';
-import { isAvailable } from './availability';
+import type { Db } from '../db/client.js';
+import { orderItems } from '../db/schema.js';
+import { getRound, getRoundPriceSnapshot } from './rounds.js';
+import { isAvailable } from './availability.js';
 
 export type OrderItemRow = typeof orderItems.$inferSelect;
 

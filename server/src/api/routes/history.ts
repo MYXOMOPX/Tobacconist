@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../../db/client';
-import { purchaseRounds, orderItems } from '../../db/schema';
-import { getRound } from '../../domain/rounds';
-import { computeUserSummary } from '../../domain/summary';
-import { getPaymentStatus } from '../../domain/payments';
-import { toRoundDto } from './rounds';
+import type { Db } from '../../db/client.js';
+import { purchaseRounds, orderItems } from '../../db/schema.js';
+import { getRound } from '../../domain/rounds.js';
+import { computeUserSummary } from '../../domain/summary.js';
+import { getPaymentStatus } from '../../domain/payments.js';
+import { toRoundDto } from './rounds.js';
 
 export function historyRoutes(db: Db) {
   return async function routes(api: FastifyInstance) {

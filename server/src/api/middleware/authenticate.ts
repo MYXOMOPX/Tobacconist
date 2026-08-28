@@ -1,8 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../../db/client';
-import { users } from '../../db/schema';
-import { verifyInitData, checkGroupMembership, type ChatMemberApi } from '../../telegram/auth';
+import type { Db } from '../../db/client.js';
+import { users } from '../../db/schema.js';
+import { verifyInitData, checkGroupMembership, type ChatMemberApi } from '../../telegram/auth.js';
 
 export type AuthedUser = { id: number; telegramId: string; displayName: string; role: 'admin' | 'member' };
 

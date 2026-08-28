@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import type { Db } from '../../db/client';
-import { brands, flavors, weights } from '../../db/schema';
-import { requireAdmin } from '../middleware/authenticate';
-import { listChecklist, adjustReceivedQty, type ChecklistRow } from '../../domain/checklist';
+import type { Db } from '../../db/client.js';
+import { brands, flavors, weights } from '../../db/schema.js';
+import { requireAdmin } from '../middleware/authenticate.js';
+import { listChecklist, adjustReceivedQty, type ChecklistRow } from '../../domain/checklist.js';
 
 async function toChecklistDto(db: Db, row: ChecklistRow) {
   const [brand, flavor, weight] = await Promise.all([

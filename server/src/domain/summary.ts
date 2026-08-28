@@ -1,9 +1,9 @@
-import type { Db } from '../db/client';
-import { brands, flavors, weights } from '../db/schema';
-import { listUserOrderItems, listRoundOrderItems } from './orders';
-import { getRound, getRoundPriceSnapshot } from './rounds';
-import { isAvailable } from './availability';
-import { packPriceEur } from './catalog';
+import type { Db } from '../db/client.js';
+import { brands, flavors, weights } from '../db/schema.js';
+import { listUserOrderItems, listRoundOrderItems } from './orders.js';
+import { getRound, getRoundPriceSnapshot } from './rounds.js';
+import { isAvailable } from './availability.js';
+import { packPriceEur } from './catalog.js';
 
 export type AggregateLine = {
   brandId: number;

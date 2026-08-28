@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { roundPayments } from '../db/schema';
+import type { Db } from '../db/client.js';
+import { roundPayments } from '../db/schema.js';
 
 export async function setPaymentStatus(
   db: Db,

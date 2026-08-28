@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
-import type { Db } from '../db/client';
-import { deliveryChecklistItems } from '../db/schema';
-import { computeAggregateSummary } from './summary';
+import type { Db } from '../db/client.js';
+import { deliveryChecklistItems } from '../db/schema.js';
+import { computeAggregateSummary } from './summary.js';
 
 export type ChecklistRow = typeof deliveryChecklistItems.$inferSelect;
 

@@ -1,4 +1,4 @@
-import type { GeminiClient } from './client';
+import type { GeminiClient } from './client.js';
 
 const PROMPT = `You are reading a photo of a tobacco vendor's flavor availability list for one brand and one pack weight. List every flavor name you can read. A flavor is UNAVAILABLE if its text is struck through (a line drawn through it) in the photo; otherwise it is AVAILABLE. Respond with ONLY a JSON array, no prose, no markdown fences, in this exact shape: [{"name": string, "available": boolean}, ...]`;
 

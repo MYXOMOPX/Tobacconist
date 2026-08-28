@@ -1,20 +1,20 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
-import type { Db } from '../db/client';
-import { createAuthenticate } from './middleware/authenticate';
-import { catalogRoutes } from './routes/catalog';
-import { availabilityRoutes } from './routes/availability';
-import { roundsRoutes } from './routes/rounds';
-import { ordersRoutes } from './routes/orders';
-import { snapshotRoutes } from './routes/snapshot';
-import { checklistRoutes } from './routes/checklist';
-import { paymentsRoutes } from './routes/payments';
-import { summariesRoutes } from './routes/summaries';
-import { historyRoutes } from './routes/history';
-import type { ChatMemberApi } from '../telegram/auth';
-import type { GeminiClient } from '../gemini/client';
-import type { DocumentSender, RoundAnnouncer } from '../telegram/notify';
+import type { Db } from '../db/client.js';
+import { createAuthenticate } from './middleware/authenticate.js';
+import { catalogRoutes } from './routes/catalog.js';
+import { availabilityRoutes } from './routes/availability.js';
+import { roundsRoutes } from './routes/rounds.js';
+import { ordersRoutes } from './routes/orders.js';
+import { snapshotRoutes } from './routes/snapshot.js';
+import { checklistRoutes } from './routes/checklist.js';
+import { paymentsRoutes } from './routes/payments.js';
+import { summariesRoutes } from './routes/summaries.js';
+import { historyRoutes } from './routes/history.js';
+import type { ChatMemberApi } from '../telegram/auth.js';
+import type { GeminiClient } from '../gemini/client.js';
+import type { DocumentSender, RoundAnnouncer } from '../telegram/notify.js';
 
 export function buildApp(deps: {
   db: Db;
