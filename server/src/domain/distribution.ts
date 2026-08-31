@@ -18,7 +18,7 @@ export type DiscrepancyParticipant = {
   orderItemId: number;
   userId: number;
   quantity: number;
-  /** Proportional to what they ordered, rounded down — a starting point, not a verdict. */
+  /** What they ordered — a starting point, not a verdict. See `proposeSplit`. */
   proposedDeliveredQty: number;
 };
 
@@ -35,13 +35,19 @@ function groupKey(item: { brandId: number; flavorId: number; weightId: number })
   return `${item.brandId}:${item.flavorId}:${item.weightId}`;
 }
 
-function proposeSplit(items: OrderItemRow[], receivedQty: number, expectedQty: number) {
+/**
+ * Everyone starts with exactly what they ordered, so the admin only marks the
+ * difference. A proportional pre-fill looked fairer but was worse to work with:
+ * rounding left everybody short of their own order and the whole position had to
+ * be redistributed by hand. Now the sum is off by exactly the shortfall (or the
+ * surplus), and that is what the admin takes away — or hands out.
+ */
+function proposeSplit(items: OrderItemRow[]) {
   return items.map((item) => ({
     orderItemId: item.id,
     userId: item.userId,
     quantity: item.quantity,
-    proposedDeliveredQty:
-      expectedQty === 0 ? 0 : Math.floor((receivedQty * item.quantity) / expectedQty),
+    proposedDeliveredQty: item.quantity,
   }));
 }
 
@@ -59,7 +65,7 @@ export async function listDiscrepancies(db: Db, orderId: number): Promise<Discre
       weightId: entry.weightId,
       expectedQty: entry.expectedQty,
       receivedQty: entry.receivedQty,
-      participants: proposeSplit(groupItems, entry.receivedQty, entry.expectedQty),
+      participants: proposeSplit(groupItems),
     });
   }
   return groups;

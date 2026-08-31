@@ -55,7 +55,7 @@ describe('delivery distribution', () => {
     expect(await listDiscrepancies(db, order.id)).toEqual([]);
   });
 
-  it('proposes a split proportional to what each person ordered, rounded down', async () => {
+  it('starts everybody off with exactly what they ordered', async () => {
     const { db, order, admin, friend, order3and1 } = await setup();
     await order3and1();
     const [entry] = await listChecklist(db, order.id);
@@ -65,10 +65,20 @@ describe('delivery distribution', () => {
     const forFriend = group.participants.find((p) => p.userId === friend.id)!;
     const forAdmin = group.participants.find((p) => p.userId === admin.id)!;
 
-    // 3/4 of 2 = 1.5 → 1, and 1/4 of 2 = 0.5 → 0. The leftover pack is the
-    // admin's call, which is why the numbers deliberately do not add up yet.
-    expect(forFriend.proposedDeliveredQty).toBe(1);
-    expect(forAdmin.proposedDeliveredQty).toBe(0);
+    // 3 + 1 = 4 against 2 delivered: the proposal deliberately does not add up,
+    // and the two packs the admin has to take away are the whole decision.
+    expect(forFriend.proposedDeliveredQty).toBe(3);
+    expect(forAdmin.proposedDeliveredQty).toBe(1);
+  });
+
+  it('starts everybody off with what they ordered when the vendor brought extra too', async () => {
+    const { db, order, admin, friend, order3and1 } = await setup();
+    await order3and1();
+    const [entry] = await listChecklist(db, order.id);
+    await adjustReceivedQty(db, entry.id, 6); // 6 of 4 arrived
+
+    const [group] = await listDiscrepancies(db, order.id);
+    expect(group.participants.map((p) => p.proposedDeliveredQty - p.quantity)).toEqual([0, 0]);
   });
 
   it('settles matching lines automatically when nothing is in dispute', async () => {

@@ -44,8 +44,8 @@ const discrepancy = {
   expectedQty: 3,
   receivedQty: 1,
   participants: [
-    { orderItemId: 100, userId: 2, displayName: 'Friend', quantity: 2, proposedDeliveredQty: 0 },
-    { orderItemId: 101, userId: 3, displayName: 'Kirill', quantity: 1, proposedDeliveredQty: 0 },
+    { orderItemId: 100, userId: 2, displayName: 'Friend', quantity: 2, proposedDeliveredQty: 2 },
+    { orderItemId: 101, userId: 3, displayName: 'Kirill', quantity: 1, proposedDeliveredQty: 1 },
   ],
 };
 
@@ -137,12 +137,15 @@ describe('AdminOrderPage — on validation', () => {
 
     expect(await screen.findByText('Что кому досталось')).toBeInTheDocument();
     expect(screen.getByText('DarkSide CyberKiwi, 250г')).toBeInTheDocument();
-    expect(screen.getByText('осталось 1')).toBeInTheDocument();
+    // Everyone is pre-filled with their own order: 2 + 1 against 1 delivered.
+    expect(screen.getByText('снять 2')).toBeInTheDocument();
 
     const finish = screen.getByRole('button', { name: 'Завершить заказ' });
     expect(finish).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: /Добавить одну пачку: Friend, досталось/ }));
+    await user.click(screen.getByRole('button', { name: /Убрать одну пачку: Friend, досталось/ }));
+    expect(screen.getByText('снять 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Убрать одну пачку: Friend, досталось/ }));
 
     expect(screen.getByText('распределено')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Завершить заказ' }));
@@ -150,8 +153,8 @@ describe('AdminOrderPage — on validation', () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith('/orders/5/finish', {
         allocations: [
-          { orderItemId: 100, deliveredQty: 1 },
-          { orderItemId: 101, deliveredQty: 0 },
+          { orderItemId: 100, deliveredQty: 0 },
+          { orderItemId: 101, deliveredQty: 1 },
         ],
       })
     );

@@ -28,6 +28,15 @@ import {
 
 type Allocations = Record<number, number>;
 
+/**
+ * Everyone starts with what they ordered, so the gap is a chore with a direction:
+ * either the admin takes packs away from the position, or hands the extra out.
+ */
+function distributionHint(remaining: number) {
+  if (remaining === 0) return 'распределено';
+  return remaining < 0 ? `снять ${-remaining}` : `раздать ${remaining}`;
+}
+
 /** Everything the admin does to one order: composition, delivery, money (spec §5–§8). */
 export function AdminOrderPage({
   orderId,
@@ -157,7 +166,7 @@ export function AdminOrderPage({
                 title={`${group.brandName} ${group.flavorName}, ${gramsLabel(group.grams)}`}
                 trailing={
                   <Badge tone={remaining === 0 ? 'ordering' : 'awaiting'}>
-                    {remaining === 0 ? 'распределено' : `осталось ${remaining}`}
+                    {distributionHint(remaining)}
                   </Badge>
                 }
               />
