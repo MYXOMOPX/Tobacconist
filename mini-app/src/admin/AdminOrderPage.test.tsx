@@ -72,13 +72,20 @@ describe('AdminOrderPage — collecting', () => {
     expect(screen.getByText('Собрано').closest('.tb-card__head')).toHaveTextContent('5.00');
   });
 
-  it('closes collection', async () => {
+  it('closes collection after confirming, then opens the checklist screen', async () => {
     mockApi('ordering');
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: 'На сверку' }));
+    await user.click(await screen.findByRole('button', { name: 'Сверка' }));
+    // Confirmation warns that the collection closes for good.
+    expect(
+      await screen.findByText(/Участники больше не смогут менять свои заказы/)
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Закрыть сбор' }));
     expect(api.post).toHaveBeenCalledWith('/orders/5/status', { status: 'awaiting_validation' });
+    expect(await screen.findByText('Сверка поставки')).toBeInTheDocument();
   });
 
   it('marks a participant as paid', async () => {
@@ -101,19 +108,18 @@ describe('AdminOrderPage — collecting', () => {
 });
 
 describe('AdminOrderPage — on validation', () => {
-  it('records what the vendor actually brought', async () => {
+  it('opens the checklist screen without touching the status, and can come back', async () => {
     mockApi('awaiting_validation');
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
-    await screen.findByText('Сверка поставки');
-    await user.click(
-      screen.getByRole('button', { name: /Добавить одну пачку: DarkSide CyberKiwi 250г/ })
-    );
+    // No confirmation dialog here — the status is already awaiting_validation.
+    await user.click(await screen.findByRole('button', { name: 'Сверка' }));
+    expect(await screen.findByText('Сверка поставки')).toBeInTheDocument();
+    expect(screen.queryByText('Закрыть сбор и перейти к сверке?')).not.toBeInTheDocument();
 
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith('/orders/5/checklist/11/adjust', { delta: 1 })
-    );
+    await user.click(screen.getByRole('button', { name: '← К заказу' }));
+    expect(await screen.findByText('Vasya')).toBeInTheDocument();
   });
 
   it('finishes straight away when the delivery matched', async () => {
@@ -121,6 +127,7 @@ describe('AdminOrderPage — on validation', () => {
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
+    await user.click(await screen.findByRole('button', { name: 'Сверка' }));
     await user.click(await screen.findByRole('button', { name: 'Завершить заказ' }));
 
     await waitFor(() =>
@@ -133,6 +140,7 @@ describe('AdminOrderPage — on validation', () => {
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
+    await user.click(await screen.findByRole('button', { name: 'Сверка' }));
     await user.click(await screen.findByRole('button', { name: 'Завершить заказ' }));
 
     expect(await screen.findByText('Что кому досталось')).toBeInTheDocument();

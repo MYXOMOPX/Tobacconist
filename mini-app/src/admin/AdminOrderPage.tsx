@@ -1,23 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
-import type {
-  ChecklistItem,
-  Discrepancy,
-  OrderDto,
-  ParticipantSummary,
-  SnapshotDto,
-} from '../types';
+import type { Discrepancy, OrderDto, ParticipantSummary, SnapshotDto } from '../types';
 import {
   Badge,
   Banner,
   Button,
   Card,
   CardHead,
+  ConfirmDialog,
   LedgerRow,
   ListSkeleton,
   Money,
-  Progress,
   Snapshot,
   StatusBadge,
   Stepper,
@@ -25,6 +19,7 @@ import {
   Weight,
   gramsLabel,
 } from '../ui';
+import { ChecklistPage } from './ChecklistPage';
 
 type Allocations = Record<number, number>;
 
@@ -51,10 +46,11 @@ export function AdminOrderPage({
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
   const [snapshot, setSnapshot] = useState<SnapshotDto | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
   const [allocations, setAllocations] = useState<Allocations>({});
   const [distributing, setDistributing] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
   const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
 
@@ -63,9 +59,6 @@ export function AdminOrderPage({
     setOrder(loaded);
     setParticipants(await api.get<ParticipantSummary[]>(`/orders/${orderId}/summaries`));
     setSnapshot(await api.get<SnapshotDto>(`/orders/${orderId}/snapshot`));
-    setChecklist(
-      loaded.status === 'ordering' ? [] : await api.get<ChecklistItem[]>(`/orders/${orderId}/checklist`)
-    );
   }, [orderId]);
 
   useEffect(() => {
@@ -81,10 +74,13 @@ export function AdminOrderPage({
     });
   }
 
-  function adjustChecklist(itemId: number, delta: number) {
+  /** Closing the collection generates the checklist server-side; jump straight into it. */
+  function closeCollectionAndCheck() {
     return run(async () => {
-      await api.post(`/orders/${orderId}/checklist/${itemId}/adjust`, { delta });
-      setChecklist(await api.get<ChecklistItem[]>(`/orders/${orderId}/checklist`));
+      await api.post(`/orders/${orderId}/status`, { status: 'awaiting_validation' });
+      setConfirmingClose(false);
+      await reload();
+      setChecking(true);
     });
   }
 
@@ -110,6 +106,7 @@ export function AdminOrderPage({
           )
         )
       );
+      setChecking(false);
       setDistributing(true);
     });
   }
@@ -118,6 +115,7 @@ export function AdminOrderPage({
     return run(async () => {
       await api.post(`/orders/${orderId}/finish`, { allocations: payload });
       setDistributing(false);
+      setChecking(false);
       await reload();
     });
   }
@@ -136,6 +134,13 @@ export function AdminOrderPage({
         {error && <Banner tone="danger">{error}</Banner>}
         <Button onClick={onBack}>К списку заказов</Button>
       </div>
+    );
+  }
+
+  // Reconciliation gets its own screen: it is a chore with a keyboard, not a card (§5).
+  if (checking) {
+    return (
+      <ChecklistPage orderId={orderId} onBack={() => setChecking(false)} onFinish={startFinishing} />
     );
   }
 
@@ -216,8 +221,6 @@ export function AdminOrderPage({
     );
   }
 
-  const receivedTotal = checklist.reduce((sum, item) => sum + item.receivedQty, 0);
-  const expectedTotal = checklist.reduce((sum, item) => sum + item.expectedQty, 0);
   const paidCount = participants.filter((p) => p.paid).length;
   const collected = participants.filter((p) => p.paid).reduce((sum, p) => sum + p.totalEur, 0);
   const billed = participants.reduce((sum, p) => sum + p.totalEur, 0);
@@ -282,40 +285,6 @@ export function AdminOrderPage({
         )}
       </Card>
 
-      {order.status === 'awaiting_validation' && (
-        <Card>
-          <CardHead title="Сверка поставки" />
-          <Progress
-            label="Принято"
-            value={receivedTotal}
-            max={expectedTotal}
-            trailing={
-              <span className="tb-num tb-num--muted">
-                {receivedTotal} / {expectedTotal}
-              </span>
-            }
-          />
-          {checklist.map((item) => (
-            <div className="tb-ledger" key={item.id}>
-              <span className="tb-ledger__label">
-                <span className="tb-ledger__name">
-                  {item.brandName} {item.flavorName}
-                </span>
-                <span className="tb-ledger__meta">{gramsLabel(item.grams)}</span>
-              </span>
-              <span className="tb-ledger__rail" aria-hidden="true" />
-              <span className="tb-ledger__note">нужно {item.expectedQty}</span>
-              <Stepper
-                value={item.receivedQty}
-                max={999}
-                onChange={(next) => adjustChecklist(item.id, next - item.receivedQty)}
-                label={`${item.brandName} ${item.flavorName} ${gramsLabel(item.grams)}`}
-              />
-            </div>
-          ))}
-        </Card>
-      )}
-
       {snapshot && (
         <Card>
           <CardHead title="Слепок для барыги" />
@@ -337,14 +306,14 @@ export function AdminOrderPage({
 
       <div className="tb-stack">
         {order.status === 'ordering' && (
-          <Button variant="primary" block onClick={() => changeStatus('awaiting_validation')}>
-            На сверку
+          <Button variant="primary" block onClick={() => setConfirmingClose(true)}>
+            Сверка
           </Button>
         )}
         {order.status === 'awaiting_validation' && (
           <>
-            <Button variant="primary" block onClick={startFinishing}>
-              Завершить заказ
+            <Button variant="primary" block onClick={() => setChecking(true)}>
+              Сверка
             </Button>
             <Button variant="secondary" block onClick={() => changeStatus('ordering')}>
               Вернуть в работу
@@ -357,6 +326,19 @@ export function AdminOrderPage({
           </Button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmingClose}
+        title="Закрыть сбор и перейти к сверке?"
+        confirmLabel="Закрыть сбор"
+        onConfirm={closeCollectionAndCheck}
+        onCancel={() => setConfirmingClose(false)}
+        body={
+          <p className="tb-subtitle">
+            Участники больше не смогут менять свои заказы. Дальше — сверка того, что привёз барыга.
+          </p>
+        }
+      />
     </div>
   );
 }
