@@ -8,9 +8,13 @@
 
 /* ---------- Page scaffolding ---------- */
 
+/* The tab bar is always there and a sticky bar may be; the page reserves room
+   for both so the last row of a list is never trapped underneath them. */
 .tb-page {
   padding: var(--tb-space-md);
-  padding-bottom: calc(var(--tb-space-xl) * 3);
+  padding-bottom: calc(
+    var(--tb-tabbar-h) + var(--tb-sticky-h) + var(--tb-safe-bottom) + var(--tb-space-lg)
+  );
   display: flex;
   flex-direction: column;
   gap: var(--tb-space-md);
@@ -566,17 +570,18 @@
 
 /* ---------- Sticky summary bar ---------- */
 
+/* Rides above the tab bar, not on top of it. The safe area belongs to the tab
+   bar below, so this bar only has to clear it. */
 .tb-sticky {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: calc(var(--tb-tabbar-h) + var(--tb-safe-bottom));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--tb-space-md);
   padding: var(--tb-space-md);
-  padding-bottom: calc(var(--tb-space-md) + var(--tb-safe-bottom));
   background: var(--tb-surface-raised);
   border-top: 1px solid var(--tb-border);
 }
@@ -587,7 +592,6 @@
   position: static;
   border: 1px solid var(--tb-border);
   border-radius: var(--tb-radius-md);
-  padding-bottom: var(--tb-space-md);
 }
 
 .tb-sticky__summary {
@@ -606,6 +610,7 @@
   right: 0;
   bottom: 0;
   display: flex;
+  height: calc(var(--tb-tabbar-h) + var(--tb-safe-bottom));
   background: var(--tb-surface);
   border-top: 1px solid var(--tb-border);
   padding-bottom: var(--tb-safe-bottom);

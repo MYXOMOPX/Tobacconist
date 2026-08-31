@@ -143,6 +143,13 @@
   /* Finger-sized minimum for anything tappable. */
   --tb-tap: 44px;
 
+  /* The two fixed bars stack at the bottom edge: the tab bar sits on the edge,
+     the sticky summary rides above it. Both heights are declared here so a page
+     can reserve exactly the room they take instead of guessing. */
+  --tb-tabbar-h: 56px;
+  /* Tap-sized button (44px) plus the bar's own 16px padding top and bottom. */
+  --tb-sticky-h: 76px;
+
   /* Telegram draws its own header; the app owns the area below it. */
   --tb-safe-bottom: env(safe-area-inset-bottom, 0px);
 
