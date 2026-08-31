@@ -1,16 +1,32 @@
 import type { GeminiClient } from './client.js';
 
-const PROMPT = `You are reading a photo of a tobacco vendor's flavor availability list for one brand and one pack weight. List every flavor name you can read. A flavor is UNAVAILABLE if its text is struck through (a line drawn through it) in the photo; otherwise it is AVAILABLE. Respond with ONLY a JSON array, no prose, no markdown fences, in this exact shape: [{"name": string, "available": boolean}, ...]`;
+/**
+ * Reads a vendor's stock screenshot. The brand and the pack weight are usually
+ * printed on the screenshot itself, so the admin should not have to retype what
+ * the picture already says (spec §4) — but both come back nullable, because a
+ * cropped screenshot may show neither.
+ */
+const PROMPT = `You are reading a screenshot of a tobacco vendor's stock list. Extract the brand name, the pack weight in grams, and every flavor in the list. A flavor is UNAVAILABLE if its text is struck through (a line drawn through it) or clearly marked as out of stock; otherwise it is AVAILABLE. The weight may be written as "250 гр", "250g", "100 г" or similar — return it as a plain number of grams. Return null for brand or grams if the screenshot does not show them. Respond with ONLY JSON in this exact shape: {"brand": string|null, "grams": number|null, "flavors": [{"name": string, "available": boolean}]}`;
+
+export type ParsedAvailability = {
+  brand: string | null;
+  grams: number | null;
+  flavors: { name: string; available: boolean }[];
+};
 
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   return (fenced ? fenced[1] : text).trim();
 }
 
+function fail(reason: string): never {
+  throw new Error(`failed to parse Gemini availability response: ${reason}`);
+}
+
 export async function parseAvailabilityImage(
   client: GeminiClient,
   params: { imageBase64: string; mimeType: string }
-): Promise<{ name: string; available: boolean }[]> {
+): Promise<ParsedAvailability> {
   const raw = await client.generateFromImage({
     imageBase64: params.imageBase64,
     mimeType: params.mimeType,
@@ -21,26 +37,35 @@ export async function parseAvailabilityImage(
   try {
     parsed = JSON.parse(extractJson(raw));
   } catch {
-    throw new Error('failed to parse Gemini availability response: not valid JSON');
+    fail('not valid JSON');
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error('failed to parse Gemini availability response: expected a JSON array');
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    fail('expected a JSON object');
   }
 
-  const entries = parsed.map((item) => {
+  const { brand, grams, flavors } = parsed as Record<string, unknown>;
+
+  if (brand !== null && brand !== undefined && typeof brand !== 'string') fail('brand must be a string or null');
+  if (grams !== null && grams !== undefined && typeof grams !== 'number') fail('grams must be a number or null');
+  if (!Array.isArray(flavors)) fail('flavors must be an array');
+
+  const entries = flavors.map((item) => {
     if (
       typeof item !== 'object' ||
       item === null ||
-      typeof (item as any).name !== 'string' ||
-      typeof (item as any).available !== 'boolean'
+      typeof (item as { name?: unknown }).name !== 'string' ||
+      typeof (item as { available?: unknown }).available !== 'boolean'
     ) {
-      throw new Error(
-        'failed to parse Gemini availability response: entry missing name/available fields'
-      );
+      fail('entry missing name/available fields');
     }
-    return { name: (item as any).name as string, available: (item as any).available as boolean };
+    const entry = item as { name: string; available: boolean };
+    return { name: entry.name.trim(), available: entry.available };
   });
 
-  return entries;
+  return {
+    brand: typeof brand === 'string' && brand.trim() ? brand.trim() : null,
+    grams: typeof grams === 'number' && Number.isFinite(grams) ? Math.round(grams) : null,
+    flavors: entries.filter((entry) => entry.name.length > 0),
+  };
 }

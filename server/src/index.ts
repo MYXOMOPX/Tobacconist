@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function createServer(config: Config) {
   const db = createDb(config.dbPath);
-  const geminiClient = createGeminiClient(config.geminiApiKey);
+  const geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
   const bot = createBot({
     botToken: config.botToken,
     db,

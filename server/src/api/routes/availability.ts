@@ -3,20 +3,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
-import { availabilityUploads } from '../../db/schema.js';
+import { availabilityUploads, weights } from '../../db/schema.js';
 import { requireAdmin } from '../middleware/authenticate.js';
-import { replaceAvailability } from '../../domain/availability.js';
+import { applyAvailabilityBatch, type AvailabilityGroup } from '../../domain/availability.js';
+import { matchBrandByName } from '../../domain/catalog.js';
 import { parseAvailabilityImage } from '../../gemini/availabilityParser.js';
 import type { GeminiClient } from '../../gemini/client.js';
-
-type ParseFields = { vendorId?: number; brandId?: number; weightId?: number };
 
 export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDir: string) {
   return async function routes(api: FastifyInstance) {
     api.addHook('preHandler', requireAdmin);
 
+    /**
+     * Reads one screenshot and reports what it says. Brand and weight are
+     * suggestions: the admin confirms or corrects them on the review screen
+     * before anything is written (spec §4).
+     */
     api.post('/parse', async (req, reply) => {
-      const fields: ParseFields = {};
+      let vendorId: number | undefined;
       let fileBuffer: Buffer | undefined;
       let mimeType = 'image/jpeg';
 
@@ -25,23 +29,24 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
           fileBuffer = await part.toBuffer();
           mimeType = part.mimetype;
         } else if (part.type === 'field' && part.fieldname === 'vendorId') {
-          fields.vendorId = Number(part.value);
-        } else if (part.type === 'field' && part.fieldname === 'brandId') {
-          fields.brandId = Number(part.value);
-        } else if (part.type === 'field' && part.fieldname === 'weightId') {
-          fields.weightId = Number(part.value);
+          vendorId = Number(part.value);
         }
       }
 
-      if (!fileBuffer || !fields.vendorId || !fields.brandId || !fields.weightId) {
-        reply.code(400).send({ error: 'missing image or vendorId/brandId/weightId fields' });
+      if (!fileBuffer || !vendorId) {
+        reply.code(400).send({ error: 'missing image or vendorId field' });
         return;
       }
 
-      const entries = await parseAvailabilityImage(geminiClient, {
+      const parsed = await parseAvailabilityImage(geminiClient, {
         imageBase64: fileBuffer.toString('base64'),
         mimeType,
       });
+
+      const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;
+      const weightRow = parsed.grams
+        ? ((await db.select().from(weights).all()).find((row) => row.grams === parsed.grams) ?? null)
+        : null;
 
       await fs.mkdir(uploadsDir, { recursive: true });
       const imageRef = path.join(uploadsDir, `${crypto.randomUUID()}.jpg`);
@@ -50,32 +55,40 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
       await db
         .insert(availabilityUploads)
         .values({
-          vendorId: fields.vendorId,
-          brandId: fields.brandId,
-          weightId: fields.weightId,
+          vendorId,
+          // Kept for audit: what the screenshot claimed, before the admin corrected it.
+          brandId: brand?.id ?? null,
+          weightId: weightRow?.id ?? null,
           imageRef,
-          rawAiResponse: JSON.stringify(entries),
+          rawAiResponse: JSON.stringify(parsed),
           createdAt: new Date().toISOString(),
         })
         .run();
 
-      return { entries };
+      return {
+        detectedBrandName: parsed.brand,
+        brandId: brand?.id ?? null,
+        detectedGrams: parsed.grams,
+        weightId: weightRow?.id ?? null,
+        entries: parsed.flavors,
+      };
     });
 
     api.post<{
-      Body: {
-        vendorId: number;
-        brandId: number;
-        weightId: number;
-        entries: { name: string; available: boolean }[];
-      };
-    }>('/confirm', async (req) => {
-      return replaceAvailability(db, {
-        vendorId: req.body.vendorId,
-        brandId: req.body.brandId,
-        weightId: req.body.weightId,
-        entries: req.body.entries,
-      });
+      Body: { vendorId: number; groups: AvailabilityGroup[]; wipeOthers?: boolean };
+    }>('/confirm', async (req, reply) => {
+      const { vendorId, groups, wipeOthers } = req.body;
+      if (!vendorId || !Array.isArray(groups) || groups.length === 0) {
+        reply.code(400).send({ error: 'vendorId and at least one group are required' });
+        return;
+      }
+      for (const group of groups) {
+        if (!group.brandId || !group.weightId) {
+          reply.code(400).send({ error: 'every group needs a brand and a weight' });
+          return;
+        }
+      }
+      return applyAvailabilityBatch(db, { vendorId, groups, wipeOthers });
     });
   };
 }

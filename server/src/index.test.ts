@@ -7,6 +7,7 @@ const config: Config = {
   adminTelegramId: '1',
   groupChatId: '-1001',
   geminiApiKey: 'fake-key',
+  geminiModel: 'gemini-2.5-flash',
   dbPath: ':memory:',
   port: 0,
   publicUrl: 'https://example.com',

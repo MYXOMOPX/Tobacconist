@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api, uploadAvailabilityImage } from '../apiClient';
+import { api } from '../apiClient';
 import { useAction } from '../useAction';
+import { AvailabilityReview } from './AvailabilityReview';
+import type { Brand, Vendor, Weight } from '../types';
 import {
   Banner,
   Button,
@@ -9,17 +11,10 @@ import {
   EmptyState,
   ListSkeleton,
   Row,
-  Select,
   TextField,
-  Toggle,
-  gramsLabel,
 } from '../ui';
 
-type Vendor = { id: number; name: string; archived: boolean };
-type Brand = { id: number; name: string };
-type Weight = { id: number; grams: number };
 type PriceRow = { vendorId: number; brandId: number; brandName: string; pricePerKgEur: number };
-type AvailabilityEntry = { name: string; available: boolean };
 
 export function AdminCatalogPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -32,10 +27,6 @@ export function AdminCatalogPage() {
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
 
-  const [uploadBrandId, setUploadBrandId] = useState<number | null>(null);
-  const [uploadWeightId, setUploadWeightId] = useState<number | null>(null);
-  const [proposedEntries, setProposedEntries] = useState<AvailabilityEntry[] | null>(null);
-  const [uploading, setUploading] = useState(false);
   const { error, run } = useAction();
 
   async function reloadCatalog() {
@@ -83,41 +74,6 @@ export function AdminCatalogPage() {
     return run(async () => {
       await api.put(`/admin/vendors/${selectedVendorId}/prices/${brandId}`, { pricePerKgEur: value });
       setPrices(await api.get<PriceRow[]>(`/admin/vendors/${selectedVendorId}/prices`));
-    });
-  }
-
-  function handleFileSelected(file: File | undefined) {
-    if (!file || selectedVendorId == null || uploadBrandId == null || uploadWeightId == null) return;
-    // Gemini parsing is the most failure-prone call in the app: a failure must
-    // surface, not just silently clear the spinner.
-    return run(async () => {
-      setUploading(true);
-      try {
-        const { entries } = await uploadAvailabilityImage(selectedVendorId, uploadBrandId, uploadWeightId, file);
-        setProposedEntries(entries);
-      } finally {
-        setUploading(false);
-      }
-    });
-  }
-
-  function toggleEntry(index: number) {
-    if (!proposedEntries) return;
-    const next = [...proposedEntries];
-    next[index] = { ...next[index], available: !next[index].available };
-    setProposedEntries(next);
-  }
-
-  function confirmAvailability() {
-    if (selectedVendorId == null || uploadBrandId == null || uploadWeightId == null || !proposedEntries) return;
-    return run(async () => {
-      await api.post('/admin/availability/confirm', {
-        vendorId: selectedVendorId,
-        brandId: uploadBrandId,
-        weightId: uploadWeightId,
-        entries: proposedEntries,
-      });
-      setProposedEntries(null);
     });
   }
 
@@ -223,64 +179,13 @@ export function AdminCatalogPage() {
             })}
           </Card>
 
-          <Card>
-            <CardHead title="Наличие по фото" />
-            <p className="tb-subtitle">
-              Загрузка заменяет наличие целиком для выбранной пары «бренд + граммовка».
-            </p>
-            <div className="tb-fieldrow">
-              <Select
-                label="Бренд"
-                value={uploadBrandId}
-                onChange={setUploadBrandId}
-                placeholder="Бренд..."
-                options={brands.map((brand) => ({ value: brand.id, label: brand.name }))}
-              />
-              <Select
-                label="Граммовка"
-                value={uploadWeightId}
-                onChange={setUploadWeightId}
-                placeholder="Граммовка..."
-                options={weights.map((weight) => ({
-                  value: weight.id,
-                  label: gramsLabel(weight.grams),
-                }))}
-              />
-            </div>
-            <span className="tb-field">
-              <label className="tb-field__label" htmlFor="availability-file">
-                Файл наличия
-              </label>
-              <input
-                id="availability-file"
-                className="tb-input"
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(event) => handleFileSelected(event.target.files?.[0])}
-              />
-            </span>
-            {uploading && <Banner>Распознаём вкусы на фото…</Banner>}
-
-            {proposedEntries && (
-              <>
-                <CardHead title="Проверь распознанное" />
-                <div className="tb-stack">
-                  {proposedEntries.map((entry, index) => (
-                    <Toggle
-                      key={entry.name}
-                      label={entry.name}
-                      pressed={entry.available}
-                      onChange={() => toggleEntry(index)}
-                    />
-                  ))}
-                </div>
-                <Button variant="primary" block onClick={confirmAvailability}>
-                  Сохранить наличие
-                </Button>
-              </>
-            )}
-          </Card>
+          <AvailabilityReview
+            vendorId={selectedVendor.id}
+            vendorName={selectedVendor.name}
+            brands={brands}
+            weights={weights}
+            onSaved={reloadCatalog}
+          />
         </>
       )}
     </div>

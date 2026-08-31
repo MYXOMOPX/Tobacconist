@@ -88,6 +88,68 @@ export async function replaceAvailability(
   return Array.from(resultMap.values());
 }
 
+export type AvailabilityGroup = {
+  brandId: number;
+  weightId: number;
+  entries: { name: string; available: boolean }[];
+};
+
+/**
+ * Saves one review session: several screenshots, each already resolved to a
+ * brand and a weight by the admin (spec §4).
+ *
+ * `wipeOthers` is the "this is the vendor's whole range now" switch: everything
+ * at this vendor that did not appear in the batch becomes unavailable. Lines
+ * already sitting in an active order are never deleted — they just get flagged
+ * as no longer stocked (§12), which is what `available = false` does.
+ */
+export async function applyAvailabilityBatch(
+  db: Db,
+  params: { vendorId: number; groups: AvailabilityGroup[]; wipeOthers?: boolean }
+) {
+  const { vendorId, groups } = params;
+  const applied = [];
+  for (const group of groups) {
+    applied.push({
+      brandId: group.brandId,
+      weightId: group.weightId,
+      lines: await replaceAvailability(db, {
+        vendorId,
+        brandId: group.brandId,
+        weightId: group.weightId,
+        entries: group.entries,
+      }),
+    });
+  }
+
+  if (params.wipeOthers) {
+    const touched = new Set(groups.map((group) => `${group.brandId}:${group.weightId}`));
+    const now = new Date().toISOString();
+    const rows = await db
+      .select({
+        id: vendorFlavorAvailability.id,
+        weightId: vendorFlavorAvailability.weightId,
+        brandId: flavors.brandId,
+        available: vendorFlavorAvailability.available,
+      })
+      .from(vendorFlavorAvailability)
+      .innerJoin(flavors, eq(flavors.id, vendorFlavorAvailability.flavorId))
+      .where(eq(vendorFlavorAvailability.vendorId, vendorId))
+      .all();
+
+    for (const row of rows) {
+      if (touched.has(`${row.brandId}:${row.weightId}`) || !row.available) continue;
+      await db
+        .update(vendorFlavorAvailability)
+        .set({ available: false, updatedAt: now })
+        .where(eq(vendorFlavorAvailability.id, row.id))
+        .run();
+    }
+  }
+
+  return applied;
+}
+
 export async function isAvailable(db: Db, vendorId: number, flavorId: number, weightId: number) {
   const row = await db
     .select()

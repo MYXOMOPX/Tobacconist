@@ -86,6 +86,10 @@ export type Discrepancy = {
 
 export type Vendor = { id: number; name: string; archived: boolean };
 
+export type Brand = { id: number; name: string };
+
+export type Weight = { id: number; grams: number };
+
 export type SnapshotDto = {
   text: string;
   table: { brand: string; flavor: string; weight: string; quantity: number; totalEur: number }[];

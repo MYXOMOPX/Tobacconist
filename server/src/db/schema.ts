@@ -50,8 +50,9 @@ export const vendorFlavorAvailability = sqliteTable('vendor_flavor_availability'
 export const availabilityUploads = sqliteTable('availability_uploads', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   vendorId: integer('vendor_id').notNull().references(() => vendors.id),
-  brandId: integer('brand_id').notNull().references(() => brands.id),
-  weightId: integer('weight_id').notNull().references(() => weights.id),
+  /** Null when the screenshot did not show it — the admin resolves it on review (§4). */
+  brandId: integer('brand_id').references(() => brands.id),
+  weightId: integer('weight_id').references(() => weights.id),
   imageRef: text('image_ref').notNull(),
   rawAiResponse: text('raw_ai_response').notNull(),
   createdAt: text('created_at').notNull(),

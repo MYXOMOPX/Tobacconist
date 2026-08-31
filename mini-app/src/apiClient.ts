@@ -27,16 +27,21 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
 };
 
+export type ParsedScreenshot = {
+  /** What the screenshot said, verbatim — shown when it did not match the catalogue. */
+  detectedBrandName: string | null;
+  brandId: number | null;
+  detectedGrams: number | null;
+  weightId: number | null;
+  entries: { name: string; available: boolean }[];
+};
+
 export async function uploadAvailabilityImage(
   vendorId: number,
-  brandId: number,
-  weightId: number,
   file: File
-): Promise<{ entries: { name: string; available: boolean }[] }> {
+): Promise<ParsedScreenshot> {
   const form = new FormData();
   form.append('vendorId', String(vendorId));
-  form.append('brandId', String(brandId));
-  form.append('weightId', String(weightId));
   form.append('image', file);
 
   const res = await fetch(`${BASE_URL}/admin/availability/parse`, {
