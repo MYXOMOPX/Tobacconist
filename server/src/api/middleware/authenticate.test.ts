@@ -19,7 +19,11 @@ function signedInitData(userId: number) {
   return params.toString();
 }
 
-function buildTestApp(opts: { memberStatus: string; adminTelegramId: string }) {
+function buildTestApp(opts: {
+  memberStatus: string;
+  adminTelegramId: string;
+  dev?: { adminName: string };
+}) {
   const db = createTestDb();
   const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: opts.memberStatus }) };
   const authenticate = createAuthenticate({
@@ -28,11 +32,16 @@ function buildTestApp(opts: { memberStatus: string; adminTelegramId: string }) {
     groupChatId: '-1001',
     adminTelegramId: opts.adminTelegramId,
     chatMemberApi,
+    dev: opts.dev,
   });
   const app = Fastify();
   app.get('/whoami', { preHandler: authenticate }, async (req) => req.authedUser);
   app.get('/admin-only', { preHandler: [authenticate, requireAdmin] }, async () => ({ ok: true }));
   return app;
+}
+
+function whoami(app: ReturnType<typeof buildTestApp>, devUser: string) {
+  return app.inject({ method: 'GET', url: '/whoami', headers: { 'x-dev-user': devUser } });
 }
 
 describe('authenticate middleware', () => {
@@ -102,6 +111,12 @@ describe('authenticate middleware', () => {
     expect(res.json()).toMatchObject({ telegramId: '555', role: 'admin', displayName: 'Ann' });
   });
 
+  it('ignores X-Dev-User unless the server runs in dev mode', async () => {
+    const app = buildTestApp({ memberStatus: 'member', adminTelegramId: '999' });
+    const res = await whoami(app, 'Ann');
+    expect(res.statusCode).toBe(401);
+  });
+
   it('requireAdmin blocks a member-role user', async () => {
     const app = buildTestApp({ memberStatus: 'member', adminTelegramId: '999' });
     const res = await app.inject({
@@ -110,5 +125,38 @@ describe('authenticate middleware', () => {
       headers: { 'x-telegram-init-data': signedInitData(555) },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('authenticate middleware in dev mode', () => {
+  it('takes the identity from X-Dev-User, no signature needed', async () => {
+    const app = buildTestApp({ memberStatus: 'left', adminTelegramId: '999', dev: { adminName: '' } });
+    const res = await whoami(app, 'Ann');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ telegramId: 'dev:Ann', displayName: 'Ann' });
+  });
+
+  it('401s without the header — dev mode still needs to know who you are', async () => {
+    const app = buildTestApp({ memberStatus: 'member', adminTelegramId: '999', dev: { adminName: '' } });
+    const res = await app.inject({ method: 'GET', url: '/whoami' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('gives admin to the configured name and member to everyone else', async () => {
+    const app = buildTestApp({
+      memberStatus: 'member',
+      adminTelegramId: '999',
+      dev: { adminName: 'Ann' },
+    });
+    expect((await whoami(app, 'Ann')).json()).toMatchObject({ role: 'admin' });
+    expect((await whoami(app, 'Bob')).json()).toMatchObject({ role: 'member' });
+  });
+
+  it('without a configured name, the first one in is the admin', async () => {
+    const app = buildTestApp({ memberStatus: 'member', adminTelegramId: '999', dev: { adminName: '' } });
+    expect((await whoami(app, 'Bob')).json()).toMatchObject({ role: 'admin' });
+    expect((await whoami(app, 'Ann')).json()).toMatchObject({ role: 'member' });
+    // Sticky: coming back does not re-decide the role.
+    expect((await whoami(app, 'Bob')).json()).toMatchObject({ role: 'admin' });
   });
 });

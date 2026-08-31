@@ -9,6 +9,21 @@ export interface OrderAnnouncer {
 }
 
 /**
+ * Stand-in for when the server runs without Telegram (config `devNoTelegram`):
+ * there is no chat to announce into, and a missing announcement must not fail
+ * the request that opened the order.
+ */
+export function createLoggingOrderAnnouncer(
+  log: (message: string) => void = console.log
+): OrderAnnouncer {
+  return {
+    async announceOrderOpened(vendorName, orderId) {
+      log(`[dev] order ${orderId} opened at ${vendorName} — announcement skipped, no Telegram`);
+    },
+  };
+}
+
+/**
  * Shared by both order-start entry points (spec §5): the `/start_order` bot
  * callback and the Mini App's POST /api/orders route.
  *

@@ -24,6 +24,8 @@ export function buildApp(deps: {
   geminiClient: GeminiClient;
   uploadsDir: string;
   orderAnnouncer: OrderAnnouncer;
+  /** Local debugging without Telegram — see `Config.devNoTelegram`. */
+  dev?: { adminName: string };
   miniAppDistPath?: string;
   onApiReady?: (api: FastifyInstance) => Promise<void>;
   /** Test seam: override the default stdout logger (e.g. to capture log output). */
@@ -56,6 +58,7 @@ export function buildApp(deps: {
     groupChatId: deps.groupChatId,
     adminTelegramId: deps.adminTelegramId,
     chatMemberApi: deps.chatMemberApi,
+    dev: deps.dev,
   });
 
   app.register(

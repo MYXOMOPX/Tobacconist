@@ -11,6 +11,8 @@ const config: Config = {
   dbPath: ':memory:',
   port: 0,
   publicUrl: 'https://example.com',
+  devNoTelegram: false,
+  devAdminName: '',
   botInfo: {
     id: 123456,
     is_bot: true,
@@ -40,5 +42,31 @@ describe('createServer', () => {
     const { app } = createServer(config);
     const res = await app.inject({ method: 'POST', url: '/telegram/webhook', payload: {} });
     expect(res.statusCode).not.toBe(404);
+  });
+
+  it('boots without a bot token in dev mode, and then has no webhook to serve', async () => {
+    const { app, bot } = createServer({
+      ...config,
+      botToken: '',
+      geminiApiKey: '',
+      botInfo: undefined,
+      devNoTelegram: true,
+    });
+    expect(bot).toBeNull();
+
+    expect((await app.inject({ method: 'GET', url: '/api/health' })).statusCode).toBe(200);
+    const webhook = await app.inject({ method: 'POST', url: '/telegram/webhook', payload: {} });
+    expect(webhook.statusCode).toBe(404);
+  });
+
+  it('lets a dev user in by name and serves them as admin', async () => {
+    const { app } = createServer({ ...config, botToken: '', botInfo: undefined, devNoTelegram: true });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { 'x-dev-user': 'Ann' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ displayName: 'Ann', role: 'admin' });
   });
 });
