@@ -1,0 +1,149 @@
+{
+  "_readme": "Демо-данные для дизайн-макетов Tobacconist Group-Buy (Claude/Stitch/OpenDesign). Используй эти же имена/цифры на всех экранах одного макета, чтобы скриншоты выглядели как один цельный продукт, а не набор случайных примеров. Модель сущностей и статусная схема — см. docs/superpowers/specs/2026-08-25-tobacconist-group-buy-design.md.",
+
+  "currentUser": { "id": "u1", "name": "Ты", "role": "admin" },
+
+  "users": [
+    { "id": "u1", "name": "Ты", "role": "admin" },
+    { "id": "u2", "name": "Кирилл", "role": "member" },
+    { "id": "u3", "name": "Ваня", "role": "member" },
+    { "id": "u4", "name": "Тимур", "role": "member" },
+    { "id": "u5", "name": "Женя", "role": "member" }
+  ],
+
+  "weights": [100, 250],
+
+  "brands": [
+    {
+      "id": "darkside",
+      "name": "DarkSide",
+      "flavors": ["Needls", "Desert Eagle", "Killer Milk", "Ice Storm", "Blood Orange", "Wild Fire"]
+    },
+    {
+      "id": "musthave",
+      "name": "MustHave",
+      "flavors": ["Milky Rice", "Kiwi Smoothie", "Watermelon", "Peach Tea", "Mango Lassi", "Strawberry Cream"]
+    },
+    {
+      "id": "blackburn",
+      "name": "BlackBurn",
+      "flavors": ["Green Tea", "Lemon Mint", "Black Grape", "Cherry Cola", "Ice Mango", "Blueberry Muffin"]
+    },
+    {
+      "id": "tangiers",
+      "name": "Tangiers",
+      "flavors": ["Cane Mint", "Frappe Latte", "Kashmir Peach", "Horchata", "Cactus Cooler", "Noir"]
+    }
+  ],
+
+  "vendors": [
+    {
+      "id": "darian-shisha",
+      "name": "Darian Shisha",
+      "catalogStatus": "активен",
+      "availabilityUpdatedAt": "2026-08-26",
+      "brands": [
+        { "brandId": "darkside", "pricePerKgEur": 42, "unavailableFlavors": ["Wild Fire"] },
+        { "brandId": "musthave", "pricePerKgEur": 38, "unavailableFlavors": [] },
+        { "brandId": "blackburn", "pricePerKgEur": 40, "unavailableFlavors": ["Blueberry Muffin"] },
+        { "brandId": "tangiers", "pricePerKgEur": 45, "unavailableFlavors": [] }
+      ]
+    },
+    {
+      "id": "boss-shisha",
+      "name": "Boss Shisha",
+      "catalogStatus": "устарело",
+      "availabilityUpdatedAt": "2026-07-30",
+      "brands": [
+        { "brandId": "darkside", "pricePerKgEur": 40, "unavailableFlavors": [] },
+        { "brandId": "tangiers", "pricePerKgEur": 44, "unavailableFlavors": ["Noir"] }
+      ]
+    },
+    {
+      "id": "world-hookah-market",
+      "name": "World Hookah Market",
+      "catalogStatus": "нет цен",
+      "availabilityUpdatedAt": null,
+      "brands": [
+        { "brandId": "musthave", "pricePerKgEur": null, "unavailableFlavors": [] },
+        { "brandId": "blackburn", "pricePerKgEur": null, "unavailableFlavors": [] },
+        { "brandId": "tangiers", "pricePerKgEur": null, "unavailableFlavors": [] }
+      ]
+    },
+    {
+      "id": "barygapafos",
+      "name": "БарыгаПафос",
+      "catalogStatus": "активен",
+      "availabilityUpdatedAt": "2026-08-20",
+      "brands": [
+        { "brandId": "darkside", "pricePerKgEur": 41, "unavailableFlavors": [] },
+        { "brandId": "blackburn", "pricePerKgEur": 37, "unavailableFlavors": [] }
+      ]
+    }
+  ],
+
+  "orders": [
+    {
+      "id": "order-12",
+      "vendorId": "darian-shisha",
+      "status": "ordering",
+      "createdAt": "2026-08-29",
+      "items": [
+        { "userId": "u1", "brandId": "darkside", "flavor": "Needls", "weight": 250, "qty": 2 },
+        { "userId": "u1", "brandId": "musthave", "flavor": "Kiwi Smoothie", "weight": 250, "qty": 3 },
+        { "userId": "u2", "brandId": "darkside", "flavor": "Killer Milk", "weight": 250, "qty": 1 },
+        { "userId": "u2", "brandId": "blackburn", "flavor": "Green Tea", "weight": 100, "qty": 2 },
+        { "userId": "u4", "brandId": "musthave", "flavor": "Milky Rice", "weight": 250, "qty": 2 }
+      ],
+      "note": "Ваня и Женя ещё не заказывали — используй для демонстрации пустого состояния 'Ты ещё не заказывал' в списке заказов."
+    },
+    {
+      "id": "order-11",
+      "vendorId": "boss-shisha",
+      "status": "awaiting_validation",
+      "createdAt": "2026-08-22",
+      "items": [
+        { "userId": "u1", "brandId": "darkside", "flavor": "Desert Eagle", "weight": 250, "qty": 1 },
+        { "userId": "u2", "brandId": "tangiers", "flavor": "Cane Mint", "weight": 100, "qty": 3, "addedByAdmin": true },
+        { "userId": "u3", "brandId": "darkside", "flavor": "Needls", "weight": 250, "qty": 2 }
+      ],
+      "checklist": [
+        { "brandId": "darkside", "flavor": "Desert Eagle", "weight": 250, "expectedQty": 1, "receivedQty": 1 },
+        { "brandId": "darkside", "flavor": "Needls", "weight": 250, "expectedQty": 2, "receivedQty": 1 },
+        { "brandId": "tangiers", "flavor": "Cane Mint", "weight": 100, "expectedQty": 3, "receivedQty": 3 }
+      ],
+      "note": "Позиция Кирилла помечена addedByAdmin — для демонстрации подписи 'добавлено администратором'. По Needls недовоз (2 ждали, 1 привезли) — для демонстрации предупреждающего акцента в сверке."
+    },
+    {
+      "id": "order-10",
+      "vendorId": "world-hookah-market",
+      "status": "done",
+      "createdAt": "2026-07-15",
+      "closedAt": "2026-07-20",
+      "items": [
+        { "userId": "u1", "brandId": "musthave", "flavor": "Watermelon", "weight": 250, "qty": 2 },
+        { "userId": "u4", "brandId": "blackburn", "flavor": "Lemon Mint", "weight": 100, "qty": 4 },
+        { "userId": "u5", "brandId": "tangiers", "flavor": "Horchata", "weight": 250, "qty": 1 }
+      ],
+      "payments": { "u1": true, "u4": true, "u5": true },
+      "note": "Полностью оплаченный завершённый заказ — для истории и экрана 'детальный итог'."
+    },
+    {
+      "id": "order-9",
+      "vendorId": "darian-shisha",
+      "status": "rejected",
+      "createdAt": "2026-06-01",
+      "rejectedAt": "2026-06-03",
+      "items": [
+        { "userId": "u1", "brandId": "darkside", "flavor": "Ice Storm", "weight": 250, "qty": 1 },
+        { "userId": "u3", "brandId": "musthave", "flavor": "Peach Tea", "weight": 100, "qty": 2 }
+      ],
+      "note": "Отменён администратором — 'барыга не смог достать товар'. Для истории и демонстрации аутлайн-бейджа 'Отменён'."
+    }
+  ],
+
+  "payments": {
+    "order-12": { "u1": true, "u2": false, "u4": false },
+    "order-11": { "u1": true, "u2": true, "u3": false }
+  }
+}

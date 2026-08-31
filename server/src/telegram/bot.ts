@@ -4,17 +4,17 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { listVendors } from '../domain/vendors.js';
-import { openRound, type Round } from '../domain/rounds.js';
-import { createRoundAnnouncer } from './notify.js';
+import { createOrder, type Order } from '../domain/orders.js';
+import { createOrderAnnouncer } from './notify.js';
 
-export interface StartRoundCtx {
+export interface StartOrderCtx {
   from?: { id: number };
   chat?: { id: number | string };
   reply(text: string, opts?: unknown): Promise<unknown>;
 }
 
-export async function handleStartRoundCommand(
-  ctx: StartRoundCtx,
+export async function handleStartOrderCommand(
+  ctx: StartOrderCtx,
   deps: { db: Db; adminTelegramId: string; groupChatId: string }
 ) {
   if (!ctx.from || String(ctx.from.id) !== deps.adminTelegramId) return;
@@ -28,12 +28,12 @@ export async function handleStartRoundCommand(
 
   await ctx.reply('Выбери барыгу:', {
     reply_markup: {
-      inline_keyboard: vendors.map((v) => [{ text: v.name, callback_data: `start_round:${v.id}` }]),
+      inline_keyboard: vendors.map((v) => [{ text: v.name, callback_data: `start_order:${v.id}` }]),
     },
   });
 }
 
-export interface StartRoundCallbackCtx {
+export interface StartOrderCallbackCtx {
   from?: { id: number };
   callbackQuery?: { data?: string };
   answerCallbackQuery(): Promise<unknown>;
@@ -62,33 +62,33 @@ async function ensureAdminUser(db: Db, adminTelegramId: string) {
   }
 }
 
-export async function handleStartRoundCallback(
-  ctx: StartRoundCallbackCtx,
+export async function handleStartOrderCallback(
+  ctx: StartOrderCallbackCtx,
   deps: { db: Db; adminTelegramId: string; groupChatId: string; miniAppUrl: string }
-): Promise<Round | undefined> {
+): Promise<Order | undefined> {
   await ctx.answerCallbackQuery();
 
   if (!ctx.from || String(ctx.from.id) !== deps.adminTelegramId) return undefined;
-  const match = ctx.callbackQuery?.data?.match(/^start_round:(\d+)$/);
+  const match = ctx.callbackQuery?.data?.match(/^start_order:(\d+)$/);
   if (!match) return undefined;
 
   try {
     const vendorId = Number(match[1]);
     const adminUser = await ensureAdminUser(deps.db, deps.adminTelegramId);
-    const round = await openRound(deps.db, vendorId, adminUser.id);
+    const order = await createOrder(deps.db, vendorId, adminUser.id);
 
     const vendor = (await listVendors(deps.db, { includeArchived: true })).find((v) => v.id === vendorId);
 
-    await ctx.editMessageText('Раунд начат ✅');
-    await createRoundAnnouncer({
+    await ctx.editMessageText('Заказ открыт ✅');
+    await createOrderAnnouncer({
       sender: ctx.api,
       groupChatId: deps.groupChatId,
       miniAppUrl: deps.miniAppUrl,
-    }).announceRoundOpened(vendor?.name ?? '');
+    }).announceOrderOpened(vendor?.name ?? '', order.id);
 
-    return round;
+    return order;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to start round';
+    const message = err instanceof Error ? err.message : 'Failed to start the order';
     await ctx.editMessageText(`Ошибка: ${message}`);
     return undefined;
   }
@@ -103,9 +103,9 @@ export function createBot(deps: {
   botInfo?: UserFromGetMe;
 }): Bot {
   const bot = new Bot(deps.botToken, deps.botInfo ? { botInfo: deps.botInfo } : undefined);
-  bot.command('start_round', (ctx) => handleStartRoundCommand(ctx as unknown as StartRoundCtx, deps));
-  bot.callbackQuery(/^start_round:\d+$/, (ctx) =>
-    handleStartRoundCallback(ctx as unknown as StartRoundCallbackCtx, deps)
+  bot.command('start_order', (ctx) => handleStartOrderCommand(ctx as unknown as StartOrderCtx, deps));
+  bot.callbackQuery(/^start_order:\d+$/, (ctx) =>
+    handleStartOrderCallback(ctx as unknown as StartOrderCallbackCtx, deps)
   );
   return bot;
 }

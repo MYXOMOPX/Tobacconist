@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
 import { createVendor, setVendorBrandPrice } from './vendors';
-import { createBrand, getWeights } from './catalog';
-import { replaceAvailability } from './availability';
-import { openRound, closeRound } from './rounds';
+import { createBrand } from './catalog';
 import { users } from '../db/schema';
-import { upsertOrderItem, listUserOrderItems, listRoundOrderItems } from './orders';
+import {
+  canTransition,
+  createOrder,
+  getActiveOrderForVendor,
+  getOrderPriceSnapshot,
+  listActiveOrders,
+  listFinishedOrders,
+  setOrderStatus,
+} from './orders';
 
 async function setup() {
   const db = createTestDb();
@@ -14,118 +20,101 @@ async function setup() {
     .values({ telegramId: 'a1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() })
     .returning()
     .all();
-  const [member] = await db
-    .insert(users)
-    .values({ telegramId: 'm1', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() })
-    .returning()
-    .all();
-  const vendor = await createVendor(db, 'Vasya');
+  const vasya = await createVendor(db, 'Vasya');
+  const petya = await createVendor(db, 'Petya');
   const brand = await createBrand(db, 'DarkSide');
-  await setVendorBrandPrice(db, vendor.id, brand.id, 18);
-  const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
-  const [{ flavorId }] = await replaceAvailability(db, {
-    vendorId: vendor.id,
-    brandId: brand.id,
-    weightId: w250.id,
-    entries: [{ name: 'CyberKiwi', available: true }],
-  });
-  const round = await openRound(db, vendor.id, admin.id);
-  return { db, admin, member, vendor, brand, w250, flavorId, round };
+  await setVendorBrandPrice(db, vasya.id, brand.id, 42);
+  return { db, admin, vasya, petya, brand };
 }
 
-describe('orders domain', () => {
-  it('creates an order item for an available flavor in an open round', async () => {
-    const { db, member, brand, w250, flavorId, round } = await setup();
-    const item = await upsertOrderItem(db, {
-      roundId: round.id,
-      userId: member.id,
-      brandId: brand.id,
-      flavorId,
-      weightId: w250.id,
-      quantity: 2,
-    });
-    expect(item?.quantity).toBe(2);
+describe('order lifecycle', () => {
+  it('freezes the vendor prices into the order when it opens', async () => {
+    const { db, admin, vasya, brand } = await setup();
+    const order = await createOrder(db, vasya.id, admin.id);
+
+    await setVendorBrandPrice(db, vasya.id, brand.id, 99);
+
+    expect(await getOrderPriceSnapshot(db, order.id, brand.id)).toBe(42);
   });
 
-  it('rejects orders for an unavailable (flavor, weight) pair', async () => {
-    const { db, member, brand, w250, flavorId, round } = await setup();
-    const w100 = (await getWeights(db)).find((w) => w.grams === 100)!;
-    await expect(
-      upsertOrderItem(db, {
-        roundId: round.id,
-        userId: member.id,
-        brandId: brand.id,
-        flavorId,
-        weightId: w100.id,
-        quantity: 1,
-      })
-    ).rejects.toThrow(/not available/i);
+  it('allows only one active order per vendor', async () => {
+    const { db, admin, vasya } = await setup();
+    await createOrder(db, vasya.id, admin.id);
+
+    await expect(createOrder(db, vasya.id, admin.id)).rejects.toThrow('already has an active order');
   });
 
-  it('rejects orders against a closed round', async () => {
-    const { db, member, brand, w250, flavorId, round } = await setup();
-    await closeRound(db, round.id);
-    await expect(
-      upsertOrderItem(db, {
-        roundId: round.id,
-        userId: member.id,
-        brandId: brand.id,
-        flavorId,
-        weightId: w250.id,
-        quantity: 1,
-      })
-    ).rejects.toThrow(/not open/i);
+  it('allows several active orders as long as the vendors differ', async () => {
+    const { db, admin, vasya, petya } = await setup();
+    await createOrder(db, vasya.id, admin.id);
+    await createOrder(db, petya.id, admin.id);
+
+    expect(await listActiveOrders(db)).toHaveLength(2);
   });
 
-  it('repeat calls update quantity instead of duplicating rows', async () => {
-    const { db, member, brand, w250, flavorId, round } = await setup();
-    await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
-    await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 5 });
-    const items = await listUserOrderItems(db, round.id, member.id);
-    expect(items).toHaveLength(1);
-    expect(items[0].quantity).toBe(5);
+  it('frees the vendor once the order reaches a terminal status', async () => {
+    const { db, admin, vasya } = await setup();
+    const first = await createOrder(db, vasya.id, admin.id);
+    await setOrderStatus(db, first.id, 'rejected');
+
+    expect(await getActiveOrderForVendor(db, vasya.id)).toBeNull();
+    const second = await createOrder(db, vasya.id, admin.id);
+    expect(second.id).not.toBe(first.id);
   });
 
-  it('quantity 0 deletes the row', async () => {
-    const { db, member, brand, w250, flavorId, round } = await setup();
-    await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
-    const result = await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 0 });
-    expect(result).toBeNull();
-    expect(await listUserOrderItems(db, round.id, member.id)).toHaveLength(0);
+  it('moves between collecting and validation as many times as needed', async () => {
+    const { db, admin, vasya } = await setup();
+    const order = await createOrder(db, vasya.id, admin.id);
+
+    await setOrderStatus(db, order.id, 'awaiting_validation');
+    await setOrderStatus(db, order.id, 'ordering');
+    const back = await setOrderStatus(db, order.id, 'awaiting_validation');
+
+    expect(back.status).toBe('awaiting_validation');
   });
 
-  it('rejects orders for a brand with availability but no price snapshot', async () => {
-    const { db, member, vendor, round } = await setup();
-    // Second brand: availability set up, but setVendorBrandPrice never called, so
-    // openRound snapshotted no price for it.
-    const unpricedBrand = await createBrand(db, 'MustHave');
-    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
-    const [{ flavorId: unpricedFlavorId }] = await replaceAvailability(db, {
-      vendorId: vendor.id,
-      brandId: unpricedBrand.id,
-      weightId: w250.id,
-      entries: [{ name: 'Virginia', available: true }],
-    });
+  it('refuses to reopen a finished order', async () => {
+    const { db, admin, vasya } = await setup();
+    const order = await createOrder(db, vasya.id, admin.id);
+    await setOrderStatus(db, order.id, 'awaiting_validation');
+    await setOrderStatus(db, order.id, 'done');
 
-    await expect(
-      upsertOrderItem(db, {
-        roundId: round.id,
-        userId: member.id,
-        brandId: unpricedBrand.id,
-        flavorId: unpricedFlavorId,
-        weightId: w250.id,
-        quantity: 1,
-      })
-    ).rejects.toThrow(/no price set for this brand/i);
-
-    expect(await listUserOrderItems(db, round.id, member.id)).toHaveLength(0);
+    await expect(setOrderStatus(db, order.id, 'ordering')).rejects.toThrow(
+      'cannot move an order from done to ordering'
+    );
+    await expect(setOrderStatus(db, order.id, 'awaiting_validation')).rejects.toThrow();
   });
 
-  it('listRoundOrderItems returns items across all users', async () => {
-    const { db, admin, member, brand, w250, flavorId, round } = await setup();
-    await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
-    await upsertOrderItem(db, { roundId: round.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
-    const items = await listRoundOrderItems(db, round.id);
-    expect(items).toHaveLength(2);
+  it('cannot finish an order straight from collecting', async () => {
+    const { db, admin, vasya } = await setup();
+    const order = await createOrder(db, vasya.id, admin.id);
+
+    await expect(setOrderStatus(db, order.id, 'done')).rejects.toThrow(
+      'cannot move an order from ordering to done'
+    );
+  });
+
+  it('lists finished and cancelled orders for the history', async () => {
+    const { db, admin, vasya, petya } = await setup();
+    const finished = await createOrder(db, vasya.id, admin.id);
+    await setOrderStatus(db, finished.id, 'awaiting_validation');
+    await setOrderStatus(db, finished.id, 'done');
+    const cancelled = await createOrder(db, petya.id, admin.id);
+    await setOrderStatus(db, cancelled.id, 'rejected');
+    await createOrder(db, vasya.id, admin.id); // still collecting
+
+    const ids = (await listFinishedOrders(db)).map((order) => order.id);
+    expect(ids.sort()).toEqual([finished.id, cancelled.id].sort());
+  });
+
+  it('describes the whole transition table', () => {
+    expect(canTransition('ordering', 'awaiting_validation')).toBe(true);
+    expect(canTransition('ordering', 'rejected')).toBe(true);
+    expect(canTransition('ordering', 'done')).toBe(false);
+    expect(canTransition('awaiting_validation', 'ordering')).toBe(true);
+    expect(canTransition('awaiting_validation', 'done')).toBe(true);
+    expect(canTransition('awaiting_validation', 'rejected')).toBe(true);
+    expect(canTransition('done', 'ordering')).toBe(false);
+    expect(canTransition('rejected', 'ordering')).toBe(false);
   });
 });

@@ -29,8 +29,10 @@ export type AggregateLineDto = {
   weightId: number;
   grams: number;
   quantity: number;
+  /** What actually arrived for this line once the delivery was checked (§7.1); null before that. */
+  deliveredQty: number | null;
   totalEur: number;
-  /** False when the (flavor, weight) pair is no longer stocked by the round's vendor. */
+  /** False when the (flavor, weight) pair is no longer stocked by the order's vendor. */
   available: boolean;
 };
 
@@ -41,16 +43,21 @@ export type UserSummaryDto = {
   totalKg: number;
   totalEur: number;
   paid: boolean;
+  /** The participant's own "I'm done picking" mark (§5). */
+  ready: boolean;
   hasUnavailableItems: boolean;
 };
 
-export type RoundDto = {
+/** Spec §5. Active while ordering or awaiting_validation; done and rejected are terminal. */
+export type OrderStatus = 'ordering' | 'awaiting_validation' | 'done' | 'rejected';
+
+export type OrderDto = {
   id: number;
   vendorId: number;
   vendorName: string;
-  status: 'open' | 'closed';
-  openedAt: string;
-  closedAt: string | null;
+  status: OrderStatus;
+  createdAt: string;
+  statusChangedAt: string;
 };
 
 export type ChecklistItemDto = {
@@ -69,4 +76,23 @@ export type PaymentDto = {
   userId: number;
   displayName: string;
   paid: boolean;
+};
+
+/** One position where the delivery did not match the order, and who ordered it (§7.1). */
+export type DiscrepancyDto = {
+  brandId: number;
+  brandName: string;
+  flavorId: number;
+  flavorName: string;
+  weightId: number;
+  grams: number;
+  expectedQty: number;
+  receivedQty: number;
+  participants: {
+    orderItemId: number;
+    userId: number;
+    displayName: string;
+    quantity: number;
+    proposedDeliveredQty: number;
+  }[];
 };

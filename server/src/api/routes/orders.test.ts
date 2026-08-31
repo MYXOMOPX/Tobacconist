@@ -1,38 +1,48 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { createTestDb, schema } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound } from '../../domain/rounds';
+import { createOrder, getOrder } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
+import { listChecklist, adjustReceivedQty } from '../../domain/checklist';
 import { ordersRoutes } from './orders';
 import type { AuthedUser } from '../middleware/authenticate';
+import type { OrderAnnouncer } from '../../telegram/notify';
 
 const admin: AuthedUser = { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
 const friend: AuthedUser = { id: 2, telegramId: '2', displayName: 'Friend', role: 'member' };
 
-function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
+function announcer(): OrderAnnouncer {
+  return { announceOrderOpened: vi.fn().mockResolvedValue(undefined) };
+}
+
+function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>, ann = announcer()) {
   const app = Fastify();
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
   });
-  app.setErrorHandler((err, req, reply) => reply.code(400).send({ error: (err as Error).message }));
-  app.register(ordersRoutes(db), { prefix: '/api/orders' });
+  app.setErrorHandler((err, req, reply) =>
+    reply.code(err.statusCode ?? 400).send({ error: (err as Error).message })
+  );
+  app.register(ordersRoutes(db, ann), { prefix: '/api/orders' });
   return app;
 }
 
-async function seedVendorWithStock(db: ReturnType<typeof createTestDb>) {
-  // Create users for foreign key constraints
-  await db
-    .insert(schema.users)
-    .values([
-      { telegramId: '1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() },
-      { telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() },
-    ])
-    .run();
+async function seedVendorWithStock(db: ReturnType<typeof createTestDb>, vendorName = 'Vasya') {
+  if (!(await db.select().from(schema.users).all()).length) {
+    await db
+      .insert(schema.users)
+      .values([
+        { telegramId: '1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() },
+        { telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() },
+      ])
+      .run();
+  }
 
-  const vendor = await createVendor(db, 'Vasya');
-  const brand = await createBrand(db, 'DarkSide');
+  const vendor = await createVendor(db, vendorName);
+  const brand = await createBrand(db, `DarkSide-${vendorName}`);
   await setVendorBrandPrice(db, vendor.id, brand.id, 20);
   const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
   const [{ flavorId }] = await replaceAvailability(db, {
@@ -45,44 +55,314 @@ async function seedVendorWithStock(db: ReturnType<typeof createTestDb>) {
 }
 
 describe('orders routes', () => {
-  it('GET /assortment returns [] when no round is open', async () => {
+  it('GET / lists nothing while no order is open', async () => {
     const db = createTestDb();
     const app = testApp(friend, db);
-    const res = await app.inject({ method: 'GET', url: '/api/orders/assortment' });
+    const res = await app.inject({ method: 'GET', url: '/api/orders' });
     expect(res.json()).toEqual([]);
   });
 
-  it('PUT /items rejects when no round is open', async () => {
+  it('lists one active order per vendor and announces each one', async () => {
     const db = createTestDb();
+    const a = await seedVendorWithStock(db, 'Vasya');
+    const b = await seedVendorWithStock(db, 'Petya');
+    const ann = announcer();
+    const app = testApp(admin, db, ann);
+
+    await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: a.vendor.id } });
+    await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: b.vendor.id } });
+
+    const list = await app.inject({ method: 'GET', url: '/api/orders' });
+    expect(list.json()).toHaveLength(2);
+    expect(ann.announceOrderOpened).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a second order at the same vendor', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const app = testApp(admin, db);
+
+    await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+    const second = await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+
+    expect(second.statusCode).toBe(400);
+    expect(second.json().error).toContain('already has an active order');
+  });
+
+  it('refuses to open an order for a non-admin', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
     const app = testApp(friend, db);
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/api/orders/items',
-      payload: { brandId: 1, flavorId: 1, weightId: 1, quantity: 1 },
-    });
-    expect(res.statusCode).toBe(400);
+    const res = await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+    expect(res.statusCode).toBe(403);
   });
 
   it('full flow: assortment shows the item, PUT creates it, GET /mine totals it', async () => {
     const db = createTestDb();
     const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
-    await openRound(db, vendor.id, admin.id);
-
+    const order = await createOrder(db, vendor.id, admin.id);
     const app = testApp(friend, db);
 
-    const assortment = await app.inject({ method: 'GET', url: '/api/orders/assortment' });
+    const assortment = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/assortment` });
     expect(assortment.json()).toEqual([
-      expect.objectContaining({ brandName: 'DarkSide', flavorName: 'CyberKiwi', grams: 250, available: true }),
+      expect.objectContaining({ flavorName: 'CyberKiwi', grams: 250, available: true }),
     ]);
 
     await app.inject({
       method: 'PUT',
-      url: '/api/orders/items',
+      url: `/api/orders/${order.id}/items`,
       payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 3 },
     });
 
-    const mine = await app.inject({ method: 'GET', url: '/api/orders/mine' });
-    expect(mine.json()).toMatchObject({ totalKg: 0.75, totalEur: 15, hasUnavailableItems: false });
+    const mine = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(mine.json()).toMatchObject({ totalKg: 0.75, totalEur: 15, hasUnavailableItems: false, ready: false });
     expect(mine.json().items).toHaveLength(1);
+  });
+
+  it('404s for an order that does not exist', async () => {
+    const db = createTestDb();
+    const app = testApp(friend, db);
+    const res = await app.inject({ method: 'GET', url: '/api/orders/999/mine' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('marks the participant ready and drops the mark when they edit again', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const app = testApp(friend, db);
+
+    await app.inject({ method: 'POST', url: `/api/orders/${order.id}/ready`, payload: { ready: true } });
+    let mine = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(mine.json().ready).toBe(true);
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/orders/${order.id}/items`,
+      payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 },
+    });
+    mine = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(mine.json().ready).toBe(false);
+  });
+
+  it('closes collection, which builds the checklist and locks participants out', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, {
+      orderId: order.id,
+      userId: friend.id,
+      brandId: brand.id,
+      flavorId,
+      weightId: w250.id,
+      quantity: 2,
+    });
+
+    const adminApp = testApp(admin, db);
+    await adminApp.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+
+    expect(await listChecklist(db, order.id)).toEqual([
+      expect.objectContaining({ expectedQty: 2, receivedQty: 0 }),
+    ]);
+
+    const memberApp = testApp(friend, db);
+    const blocked = await memberApp.inject({
+      method: 'PUT',
+      url: `/api/orders/${order.id}/items`,
+      payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 5 },
+    });
+    expect(blocked.statusCode).toBe(400);
+    expect(blocked.json().error).toContain('adding positions is closed');
+  });
+
+  it('lets the admin add a line for someone else once the order is on validation', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const app = testApp(admin, db);
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/orders/${order.id}/items`,
+      payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 1, userId: friend.id },
+    });
+
+    expect(res.json().item).toMatchObject({ userId: friend.id, addedByUserId: admin.id, quantity: 1 });
+  });
+
+  it('returning an order to collecting clears readiness and any recorded delivery', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const memberApp = testApp(friend, db);
+    await memberApp.inject({
+      method: 'PUT',
+      url: `/api/orders/${order.id}/items`,
+      payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 },
+    });
+    await memberApp.inject({ method: 'POST', url: `/api/orders/${order.id}/ready`, payload: { ready: true } });
+
+    const adminApp = testApp(admin, db);
+    await adminApp.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    await adminApp.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'ordering' },
+    });
+
+    const mine = await memberApp.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(mine.json().ready).toBe(false);
+    expect(mine.json().items[0].deliveredQty).toBeNull();
+  });
+
+  it('finishes an order that matched the delivery, billing what was ordered', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, {
+      orderId: order.id,
+      userId: friend.id,
+      brandId: brand.id,
+      flavorId,
+      weightId: w250.id,
+      quantity: 2,
+    });
+
+    const app = testApp(admin, db);
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    const [entry] = await listChecklist(db, order.id);
+    await adjustReceivedQty(db, entry.id, 2);
+
+    const finished = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/finish`, payload: {} });
+
+    expect(finished.json().status).toBe('done');
+    const memberApp = testApp(friend, db);
+    const mine = await memberApp.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(mine.json().items[0].deliveredQty).toBe(2);
+    expect(mine.json().totalEur).toBe(10);
+  });
+
+  it('refuses to finish while a shortfall is still unassigned', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, {
+      orderId: order.id,
+      userId: friend.id,
+      brandId: brand.id,
+      flavorId,
+      weightId: w250.id,
+      quantity: 2,
+    });
+
+    const app = testApp(admin, db);
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    const [entry] = await listChecklist(db, order.id);
+    await adjustReceivedQty(db, entry.id, 1); // one pack short
+
+    const res = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/finish`, payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('must be distributed');
+    expect((await getOrder(db, order.id))!.status).toBe('awaiting_validation');
+  });
+
+  it('finishes a short delivery once the admin says whose pack is missing', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, { orderId: order.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    await upsertOrderItem(db, { orderId: order.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+
+    const app = testApp(admin, db);
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    const [entry] = await listChecklist(db, order.id);
+    await adjustReceivedQty(db, entry.id, 1); // 1 of 2 arrived
+
+    const groups = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/discrepancies` });
+    expect(groups.json()).toHaveLength(1);
+    const participants = groups.json()[0].participants;
+    expect(participants).toHaveLength(2);
+
+    const mine = participants.find((p: { userId: number }) => p.userId === friend.id)!;
+    const theirs = participants.find((p: { userId: number }) => p.userId === admin.id)!;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/finish`,
+      payload: {
+        allocations: [
+          { orderItemId: mine.orderItemId, deliveredQty: 1 },
+          { orderItemId: theirs.orderItemId, deliveredQty: 0 },
+        ],
+      },
+    });
+
+    expect(res.json().status).toBe('done');
+    const memberApp = testApp(friend, db);
+    const friendSummary = await memberApp.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(friendSummary.json().totalEur).toBe(5);
+    const adminSummary = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
+    expect(adminSummary.json().totalEur).toBe(0);
+  });
+
+  it('never moves an order out of done', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const app = testApp(admin, db);
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    await app.inject({ method: 'POST', url: `/api/orders/${order.id}/finish`, payload: {} });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'ordering' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('cannot move an order from done to ordering');
+  });
+
+  it('cancels an order and frees the vendor for a new one', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const app = testApp(admin, db);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/status`,
+      payload: { status: 'rejected' },
+    });
+
+    const again = await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+    expect(again.statusCode).toBe(201);
   });
 });

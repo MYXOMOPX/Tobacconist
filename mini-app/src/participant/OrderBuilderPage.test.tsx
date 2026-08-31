@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrderBuilderPage } from './OrderBuilderPage';
@@ -6,97 +6,159 @@ import { api } from '../apiClient';
 
 vi.mock('../apiClient', () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
 
-describe('OrderBuilderPage', () => {
-  it('shows a message when there is no active round', async () => {
-    vi.mocked(api.get).mockImplementation(async (path: string) => {
-      if (path === '/orders/assortment') return [];
-      if (path === '/orders/mine') return { round: null, items: [], totalKg: 0, totalEur: 0, hasUnavailableItems: false };
-      return [];
-    });
-    render(<OrderBuilderPage />);
-    expect(await screen.findByText(/нет активной закупки/i)).toBeInTheDocument();
-  });
+const FLAVOR = {
+  brandId: 1,
+  brandName: 'DarkSide',
+  flavorId: 1,
+  flavorName: 'CyberKiwi',
+  weightId: 1,
+  grams: 250,
+  available: true,
+};
 
-  it('renders assortment, prefills existing quantity, and saves on blur', async () => {
-    vi.mocked(api.get).mockImplementation(async (path: string) => {
-      if (path === '/orders/assortment') {
-        return [{ brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, available: true }];
-      }
-      if (path === '/orders/mine') {
-        return {
-          round: { id: 5, vendorId: 1, status: 'open' },
-          items: [{ brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 2, totalEur: 10 }],
-          totalKg: 0.5,
-          totalEur: 10,
-          hasUnavailableItems: false,
-        };
-      }
-      return [];
-    });
+function order(status: string) {
+  return { id: 5, vendorId: 1, vendorName: 'Vasya', status, createdAt: '', statusChangedAt: '' };
+}
+
+function mine(overrides: Record<string, unknown> = {}) {
+  return {
+    order: order('ordering'),
+    items: [{ ...FLAVOR, quantity: 2, deliveredQty: null, totalEur: 10.5 }],
+    totalKg: 0.5,
+    totalEur: 10.5,
+    ready: false,
+    paid: false,
+    hasUnavailableItems: false,
+    ...overrides,
+  };
+}
+
+function mockApi(mineResponse: Record<string, unknown>, assortment = [FLAVOR]) {
+  vi.mocked(api.get).mockImplementation(async (path: string) => {
+    if (path === '/orders/5/assortment') return assortment;
+    if (path === '/orders/5/mine') return mineResponse;
+    return [];
+  });
+}
+
+describe('OrderBuilderPage', () => {
+  it('renders assortment with the quantity already ordered and saves a change', async () => {
+    mockApi(mine());
     vi.mocked(api.put).mockResolvedValue({});
 
     const user = userEvent.setup();
-    render(<OrderBuilderPage />);
-    const input = (await screen.findByLabelText(/CyberKiwi/)) as HTMLInputElement;
-    expect(input.value).toBe('2');
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
 
-    await user.clear(input);
-    await user.type(input, '5');
-    await user.tab();
+    const stepper = await screen.findByRole('group', { name: 'CyberKiwi 250г' });
+    expect(stepper).toHaveTextContent('2');
+
+    await user.click(screen.getByRole('button', { name: /Добавить одну пачку: CyberKiwi 250г/ }));
 
     await waitFor(() =>
-      expect(api.put).toHaveBeenCalledWith('/orders/items', { brandId: 1, flavorId: 1, weightId: 1, quantity: 5 })
+      expect(api.put).toHaveBeenCalledWith('/orders/5/items', {
+        brandId: 1,
+        flavorId: 1,
+        weightId: 1,
+        quantity: 3,
+      })
     );
-    expect(await screen.findByText(/0.50 кг, 10.00 €/)).toBeInTheDocument();
+
+    const line = (await screen.findByText('DarkSide CyberKiwi')).closest('.tb-ledger');
+    expect(line).toHaveTextContent('10.50');
+  });
+
+  it('locks the steppers once the order is on validation', async () => {
+    mockApi(mine({ order: order('awaiting_validation') }));
+
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
+
+    expect(await screen.findByText(/Добавление позиций закрыто/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Добавить одну пачку: CyberKiwi 250г/ })
+    ).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Я готов' })).not.toBeInTheDocument();
+  });
+
+  it('marks the participant ready and offers to take it back', async () => {
+    mockApi(mine());
+    vi.mocked(api.post).mockResolvedValue({});
+
+    const user = userEvent.setup();
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Я готов' }));
+    expect(api.post).toHaveBeenCalledWith('/orders/5/ready', { ready: true });
+
+    mockApi(mine({ ready: true }));
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Ещё выбираю' })).toBeInTheDocument();
   });
 
   it('marks the specific order line that is no longer available', async () => {
-    vi.mocked(api.get).mockImplementation(async (path: string) => {
-      if (path === '/orders/assortment') {
-        // The dropped flavor is gone from the assortment (server filters to available).
-        return [{ brandId: 1, brandName: 'DarkSide', flavorId: 2, flavorName: 'Bananapapa', weightId: 1, grams: 250, available: true }];
-      }
-      if (path === '/orders/mine') {
-        return {
-          round: { id: 5, vendorId: 1, status: 'open' },
-          items: [
-            { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 2, totalEur: 10, available: false },
-            { brandId: 1, brandName: 'DarkSide', flavorId: 2, flavorName: 'Bananapapa', weightId: 1, grams: 250, quantity: 1, totalEur: 5, available: true },
-          ],
-          totalKg: 0.75,
-          totalEur: 15,
-          hasUnavailableItems: true,
-        };
-      }
-      return [];
-    });
+    mockApi(
+      mine({
+        items: [
+          { ...FLAVOR, quantity: 2, deliveredQty: null, totalEur: 10, available: false },
+          {
+            ...FLAVOR,
+            flavorId: 2,
+            flavorName: 'Bananapapa',
+            quantity: 1,
+            deliveredQty: null,
+            totalEur: 5,
+            available: true,
+          },
+        ],
+        hasUnavailableItems: true,
+      }),
+      [{ ...FLAVOR, flavorId: 2, flavorName: 'Bananapapa' }]
+    );
 
-    render(<OrderBuilderPage />);
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
 
-    const droppedLine = await screen.findByText(/CyberKiwi - 250г: x2/);
+    const droppedLine = (await screen.findByText('DarkSide CyberKiwi')).closest('.tb-ledger');
+    expect(droppedLine).toHaveClass('tb-ledger--unavailable');
     expect(droppedLine).toHaveTextContent('больше не в наличии');
-    const keptLine = screen.getByText(/Bananapapa - 250г: x1/);
-    expect(keptLine).not.toHaveTextContent('больше не в наличии');
+
+    const keptLine = screen.getByText('DarkSide Bananapapa').closest('.tb-ledger');
+    expect(keptLine).not.toHaveClass('tb-ledger--unavailable');
+  });
+
+  it('shows what actually arrived once the delivery was checked', async () => {
+    mockApi(
+      mine({
+        order: order('done'),
+        items: [{ ...FLAVOR, quantity: 2, deliveredQty: 1, totalEur: 5.25 }],
+      })
+    );
+
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
+
+    const line = (await screen.findByText('DarkSide CyberKiwi')).closest('.tb-ledger');
+    expect(line).toHaveTextContent('досталось 1');
   });
 
   it('shows the error message when saving a quantity fails', async () => {
-    vi.mocked(api.get).mockImplementation(async (path: string) => {
-      if (path === '/orders/assortment') {
-        return [{ brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, available: true }];
-      }
-      if (path === '/orders/mine') {
-        return { round: { id: 5, vendorId: 1, status: 'open' }, items: [], totalKg: 0, totalEur: 0, hasUnavailableItems: false };
-      }
-      return [];
-    });
+    mockApi(mine({ items: [], totalKg: 0, totalEur: 0 }));
     vi.mocked(api.put).mockRejectedValue(new Error('no price set for this brand yet'));
 
     const user = userEvent.setup();
-    render(<OrderBuilderPage />);
-    const input = (await screen.findByLabelText(/CyberKiwi/)) as HTMLInputElement;
-    await user.type(input, '1');
-    await user.tab();
+    render(<OrderBuilderPage orderId={5} onBack={vi.fn()} />);
+
+    await user.click(
+      await screen.findByRole('button', { name: /Добавить одну пачку: CyberKiwi 250г/ })
+    );
 
     expect(await screen.findByRole('alert')).toHaveTextContent('no price set for this brand yet');
+  });
+
+  it('offers a way back to the list of orders', async () => {
+    mockApi(mine());
+    const onBack = vi.fn();
+    const user = userEvent.setup();
+    render(<OrderBuilderPage orderId={5} onBack={onBack} />);
+
+    await user.click(await screen.findByRole('button', { name: '← Все заказы' }));
+    expect(onBack).toHaveBeenCalled();
   });
 });

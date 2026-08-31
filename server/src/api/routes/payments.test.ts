@@ -4,8 +4,8 @@ import { createTestDb } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound } from '../../domain/rounds';
-import { upsertOrderItem } from '../../domain/orders';
+import { createOrder } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
 import { users } from '../../db/schema';
 import { paymentsRoutes } from './payments';
 import type { AuthedUser } from '../middleware/authenticate';
@@ -25,7 +25,7 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
   });
-  app.register(paymentsRoutes(db), { prefix: '/api/rounds/:roundId/payments' });
+  app.register(paymentsRoutes(db), { prefix: '/api/orders/:orderId/payments' });
   return app;
 }
 
@@ -39,15 +39,15 @@ describe('payments routes', () => {
     await setVendorBrandPrice(db, vendor.id, brand.id, 20);
     const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
     const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'CyberKiwi', available: true }] });
-    const round = await openRound(db, vendor.id, admin.id);
-    await upsertOrderItem(db, { roundId: round.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, { orderId: order.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
 
     const app = testApp(admin, db);
-    const list = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/payments` });
+    const list = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/payments` });
     expect(list.json()).toEqual([{ userId: friend.id, displayName: 'Friend', paid: false }]);
 
-    await app.inject({ method: 'POST', url: `/api/rounds/${round.id}/payments/${friend.id}`, payload: { paid: true } });
-    const after = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/payments` });
+    await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payments/${friend.id}`, payload: { paid: true } });
+    const after = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/payments` });
     expect(after.json()).toEqual([{ userId: friend.id, displayName: 'Friend', paid: true }]);
   });
 
@@ -60,14 +60,14 @@ describe('payments routes', () => {
     await setVendorBrandPrice(db, vendor.id, brand.id, 20);
     const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
     const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'CyberKiwi', available: true }] });
-    const round = await openRound(db, vendor.id, admin.id);
-    await upsertOrderItem(db, { roundId: round.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    const order = await createOrder(db, vendor.id, admin.id);
+    await upsertOrderItem(db, { orderId: order.id, userId: member.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
 
     const app = testApp(member, db);
-    const getRes = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/payments` });
+    const getRes = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/payments` });
     expect(getRes.statusCode).toBe(403);
 
-    const postRes = await app.inject({ method: 'POST', url: `/api/rounds/${round.id}/payments/${member.id}`, payload: { paid: true } });
+    const postRes = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/payments/${member.id}`, payload: { paid: true } });
     expect(postRes.statusCode).toBe(403);
   });
 });

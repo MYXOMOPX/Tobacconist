@@ -5,7 +5,6 @@ import type { Db } from '../db/client.js';
 import { createAuthenticate } from './middleware/authenticate.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { availabilityRoutes } from './routes/availability.js';
-import { roundsRoutes } from './routes/rounds.js';
 import { ordersRoutes } from './routes/orders.js';
 import { snapshotRoutes } from './routes/snapshot.js';
 import { checklistRoutes } from './routes/checklist.js';
@@ -14,7 +13,7 @@ import { summariesRoutes } from './routes/summaries.js';
 import { historyRoutes } from './routes/history.js';
 import type { ChatMemberApi } from '../telegram/auth.js';
 import type { GeminiClient } from '../gemini/client.js';
-import type { DocumentSender, RoundAnnouncer } from '../telegram/notify.js';
+import type { DocumentSender, OrderAnnouncer } from '../telegram/notify.js';
 
 export function buildApp(deps: {
   db: Db;
@@ -25,7 +24,7 @@ export function buildApp(deps: {
   geminiClient: GeminiClient;
   uploadsDir: string;
   documentSender: DocumentSender;
-  roundAnnouncer: RoundAnnouncer;
+  orderAnnouncer: OrderAnnouncer;
   miniAppDistPath?: string;
   onApiReady?: (api: FastifyInstance) => Promise<void>;
   /** Test seam: override the default stdout logger (e.g. to capture log output). */
@@ -70,12 +69,11 @@ export function buildApp(deps: {
       api.get('/me', async (req) => req.authedUser);
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
-      api.register(roundsRoutes(deps.db, deps.roundAnnouncer), { prefix: '/rounds' });
-      api.register(ordersRoutes(deps.db), { prefix: '/orders' });
-      api.register(snapshotRoutes(deps.db, deps.documentSender), { prefix: '/rounds/:roundId/snapshot' });
-      api.register(checklistRoutes(deps.db), { prefix: '/rounds/:roundId/checklist' });
-      api.register(paymentsRoutes(deps.db), { prefix: '/rounds/:roundId/payments' });
-      api.register(summariesRoutes(deps.db), { prefix: '/rounds/:roundId/summaries' });
+      api.register(ordersRoutes(deps.db, deps.orderAnnouncer), { prefix: '/orders' });
+      api.register(snapshotRoutes(deps.db, deps.documentSender), { prefix: '/orders/:orderId/snapshot' });
+      api.register(checklistRoutes(deps.db), { prefix: '/orders/:orderId/checklist' });
+      api.register(paymentsRoutes(deps.db), { prefix: '/orders/:orderId/payments' });
+      api.register(summariesRoutes(deps.db), { prefix: '/orders/:orderId/summaries' });
       api.register(historyRoutes(deps.db), { prefix: '/history' });
     },
     { prefix: '/api' }

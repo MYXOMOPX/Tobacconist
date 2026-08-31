@@ -7,14 +7,14 @@ import { api } from '../apiClient';
 vi.mock('../apiClient', () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
 
 describe('HistoryPage', () => {
-  it('lists closed rounds and shows the selected round detail on click', async () => {
+  it('lists finished orders and shows the selected one on click', async () => {
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       if (path === '/history') {
-        return [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' }];
+        return [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' }];
       }
       if (path === '/history/7') {
         return {
-          round: { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' },
+          order: { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' },
           items: [],
           totalKg: 0.75,
           totalEur: 15,
@@ -26,26 +26,28 @@ describe('HistoryPage', () => {
 
     const user = userEvent.setup();
     render(<HistoryPage />);
-    await user.click(await screen.findByText(/Vasya/));
+    await user.click(await screen.findByRole('button', { name: /Vasya/ }));
 
-    expect(await screen.findByText(/0.75 кг, 15.00 €/)).toBeInTheDocument();
-    expect(screen.getByText(/— оплачено$/)).toBeInTheDocument();
-    expect(screen.queryByText(/не оплачено/)).not.toBeInTheDocument();
+    const detail = (await screen.findByText('Итого')).closest('.tb-card');
+    expect(detail).toHaveTextContent('0.75');
+    expect(detail).toHaveTextContent('15.00');
+    expect(detail).toHaveTextContent('Оплачено');
+    expect(screen.queryByText('Не оплачено')).not.toBeInTheDocument();
   });
 
-  it('works unchanged for an admin caller, whose /history lists every closed round', async () => {
+  it('works unchanged for an admin caller, whose /history lists every finished order', async () => {
     // The server returns ALL closed rounds for admins; the detail view carries the
     // caller's own (possibly zero) totals.
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       if (path === '/history') {
         return [
-          { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' },
-          { id: 8, vendorId: 2, vendorName: 'Petya', status: 'closed', openedAt: '', closedAt: '2026-08-10' },
+          { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' },
+          { id: 8, vendorId: 2, vendorName: 'Petya', status: 'rejected', createdAt: '', statusChangedAt: '2026-08-10T00:00:00.000Z' },
         ];
       }
       if (path === '/history/8') {
         return {
-          round: { id: 8, vendorId: 2, vendorName: 'Petya', status: 'closed', openedAt: '', closedAt: '2026-08-10' },
+          order: { id: 8, vendorId: 2, vendorName: 'Petya', status: 'rejected', createdAt: '', statusChangedAt: '2026-08-10T00:00:00.000Z' },
           items: [],
           totalKg: 0,
           totalEur: 0,
@@ -57,11 +59,18 @@ describe('HistoryPage', () => {
 
     const user = userEvent.setup();
     render(<HistoryPage />);
-    expect(await screen.findByText(/Vasya/)).toBeInTheDocument();
-    await user.click(await screen.findByText(/Petya/));
+    expect(await screen.findByRole('button', { name: /Vasya/ })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /Petya/ }));
 
-    expect(await screen.findByText(/0.00 кг, 0.00 €/)).toBeInTheDocument();
-    expect(screen.getByText(/не оплачено$/)).toBeInTheDocument();
+    const detail = (await screen.findByText('Итого')).closest('.tb-card');
+    expect(detail).toHaveTextContent('0.00');
+    expect(detail).toHaveTextContent('Не оплачено');
+  });
+
+  it('invites the user to act when there is nothing in the history yet', async () => {
+    vi.mocked(api.get).mockResolvedValue([]);
+    render(<HistoryPage />);
+    expect(await screen.findByText('Здесь пока пусто')).toBeInTheDocument();
   });
 
   it('shows the error message when the history load fails', async () => {

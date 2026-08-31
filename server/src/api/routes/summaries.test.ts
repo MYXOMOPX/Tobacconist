@@ -4,9 +4,9 @@ import { createTestDb } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound } from '../../domain/rounds';
-import { upsertOrderItem } from '../../domain/orders';
-import { setPaymentStatus } from '../../domain/payments';
+import { createOrder } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
+import { setPaymentStatus } from '../../domain/participants';
 import { users } from '../../db/schema';
 import { summariesRoutes } from './summaries';
 import type { AuthedUser } from '../middleware/authenticate';
@@ -26,7 +26,7 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
   });
-  app.register(summariesRoutes(db), { prefix: '/api/rounds/:roundId/summaries' });
+  app.register(summariesRoutes(db), { prefix: '/api/orders/:orderId/summaries' });
   return app;
 }
 
@@ -50,45 +50,47 @@ async function seed() {
     weightId: w250.id,
     entries: [{ name: 'CyberKiwi', available: true }],
   });
-  const round = await openRound(db, vendor.id, admin.id);
-  return { db, vendor, brand, w250, flavorId, round };
+  const order = await createOrder(db, vendor.id, admin.id);
+  return { db, vendor, brand, w250, flavorId, order };
 }
 
 describe('summaries route', () => {
   it('returns kg/eur totals and paid status per participant', async () => {
-    const { db, brand, w250, flavorId, round } = await seed();
-    await upsertOrderItem(db, { roundId: round.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 3 });
-    await upsertOrderItem(db, { roundId: round.id, userId: 1, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
-    await setPaymentStatus(db, round.id, 2, true, 1);
+    const { db, brand, w250, flavorId, order } = await seed();
+    await upsertOrderItem(db, { orderId: order.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 3 });
+    await upsertOrderItem(db, { orderId: order.id, userId: 1, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    await setPaymentStatus(db, order.id, 2, true, 1);
 
     const app = testApp(admin, db);
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/summaries` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/summaries` });
     expect(res.statusCode).toBe(200);
     const rows = res.json();
     expect(rows).toHaveLength(2);
     expect(rows).toEqual(
       expect.arrayContaining([
-        { userId: 2, displayName: 'Friend', totalKg: 0.75, totalEur: 15, paid: true },
-        { userId: 1, displayName: 'Admin', totalKg: 0.25, totalEur: 5, paid: false },
+        expect.objectContaining({ userId: 2, displayName: 'Friend', totalKg: 0.75, totalEur: 15, paid: true, ready: false }),
+        expect.objectContaining({ userId: 1, displayName: 'Admin', totalKg: 0.25, totalEur: 5, paid: false, ready: false }),
       ])
     );
   });
 
   it('lists a participant who was never marked either way as unpaid', async () => {
-    const { db, brand, w250, flavorId, round } = await seed();
-    await upsertOrderItem(db, { roundId: round.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    const { db, brand, w250, flavorId, order } = await seed();
+    await upsertOrderItem(db, { orderId: order.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
 
     const app = testApp(admin, db);
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/summaries` });
-    expect(res.json()).toEqual([{ userId: 2, displayName: 'Friend', totalKg: 0.25, totalEur: 5, paid: false }]);
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/summaries` });
+    expect(res.json()).toEqual([
+      expect.objectContaining({ userId: 2, displayName: 'Friend', totalKg: 0.25, totalEur: 5, paid: false, ready: false }),
+    ]);
   });
 
   it('rejects non-admin members with 403', async () => {
-    const { db, brand, w250, flavorId, round } = await seed();
-    await upsertOrderItem(db, { roundId: round.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+    const { db, brand, w250, flavorId, order } = await seed();
+    await upsertOrderItem(db, { orderId: order.id, userId: 2, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
 
     const app = testApp(member, db);
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/summaries` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/summaries` });
     expect(res.statusCode).toBe(403);
   });
 });

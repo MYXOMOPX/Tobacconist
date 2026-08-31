@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { api, uploadAvailabilityImage } from '../apiClient';
 import { useAction } from '../useAction';
+import {
+  Banner,
+  Button,
+  Card,
+  CardHead,
+  EmptyState,
+  ListSkeleton,
+  Row,
+  Select,
+  TextField,
+  Toggle,
+  gramsLabel,
+} from '../ui';
 
 type Vendor = { id: number; name: string; archived: boolean };
 type Brand = { id: number; name: string };
@@ -17,6 +30,7 @@ export function AdminCatalogPage() {
   const [newVendorName, setNewVendorName] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(true);
 
   const [uploadBrandId, setUploadBrandId] = useState<number | null>(null);
   const [uploadWeightId, setUploadWeightId] = useState<number | null>(null);
@@ -31,7 +45,7 @@ export function AdminCatalogPage() {
   }
 
   useEffect(() => {
-    run(reloadCatalog);
+    run(reloadCatalog).finally(() => setLoading(false));
   }, [run]);
 
   useEffect(() => {
@@ -107,99 +121,168 @@ export function AdminCatalogPage() {
     });
   }
 
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
+
   return (
-    <section>
-      {error && <p role="alert">{error}</p>}
-      <h2>Барыги</h2>
-      <ul>
-        {vendors.map((v) => (
-          <li key={v.id}>
-            <button onClick={() => setSelectedVendorId(v.id)}>{v.name}</button>
-          </li>
-        ))}
-      </ul>
-      <input value={newVendorName} onChange={(e) => setNewVendorName(e.target.value)} placeholder="Новый барыга" />
-      <button onClick={createVendor}>Добавить барыгу</button>
+    <div className="tb-page">
+      <h1 className="tb-title">Барыги и цены</h1>
+      {error && <Banner tone="danger">{error}</Banner>}
 
-      <h2>Бренды</h2>
-      <ul>
-        {brands.map((b) => (
-          <li key={b.id}>{b.name}</li>
-        ))}
-      </ul>
-      <input value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} placeholder="Новый бренд" />
-      <button onClick={createBrand}>Добавить бренд</button>
-
-      {selectedVendorId != null && (
-        <>
-          <h2>Цены (€/кг)</h2>
-          <ul>
-            {brands.map((b) => {
-              const existing = prices.find((p) => p.brandId === b.id);
-              return (
-                <li key={b.id}>
-                  {b.name}: {existing ? `${existing.pricePerKgEur} €/кг` : 'не задано'}
-                  <input
-                    value={priceInputs[b.id] ?? ''}
-                    onChange={(e) => setPriceInputs({ ...priceInputs, [b.id]: e.target.value })}
-                  />
-                  <button onClick={() => savePrice(b.id)}>Сохранить</button>
-                </li>
-              );
-            })}
-          </ul>
-
-          <h2>Загрузить наличие</h2>
-          <select
-            value={uploadBrandId ?? ''}
-            onChange={(e) => setUploadBrandId(Number(e.target.value) || null)}
-          >
-            <option value="">Бренд...</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={uploadWeightId ?? ''}
-            onChange={(e) => setUploadWeightId(Number(e.target.value) || null)}
-          >
-            <option value="">Граммовка...</option>
-            {weights.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.grams}г
-              </option>
-            ))}
-          </select>
-          <label>
-            Файл наличия
-            <input
-              type="file"
-              accept="image/*"
-              disabled={uploading}
-              onChange={(e) => handleFileSelected(e.target.files?.[0])}
-            />
-          </label>
-
-          {proposedEntries && (
-            <div>
-              <h3>Проверь распознанное</h3>
-              <ul>
-                {proposedEntries.map((entry, i) => (
-                  <li key={entry.name}>
-                    <label>
-                      <input type="checkbox" checked={entry.available} onChange={() => toggleEntry(i)} />
-                      {entry.name}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              <button onClick={confirmAvailability}>Сохранить наличие</button>
+      {loading ? (
+        <ListSkeleton />
+      ) : (
+        <Card>
+          <CardHead title="Барыги" />
+          {vendors.length === 0 ? (
+            <EmptyState title="Барыг ещё нет" text="Заведи первого — ниже." />
+          ) : (
+            <div className="tb-stack">
+              {vendors.map((vendor) => (
+                <Row
+                  key={vendor.id}
+                  label={vendor.name}
+                  note={vendor.id === selectedVendorId ? 'выбран' : undefined}
+                  onClick={() => setSelectedVendorId(vendor.id)}
+                />
+              ))}
             </div>
           )}
+          <div className="tb-fieldrow">
+            <TextField
+              label="Новый барыга"
+              value={newVendorName}
+              onChange={setNewVendorName}
+              placeholder="Например: Darian Shisha"
+            />
+            <Button onClick={createVendor}>Добавить</Button>
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <CardHead title="Бренды" />
+        <div className="tb-stack">
+          {brands.map((brand) => (
+            <div className="tb-ledger" key={brand.id}>
+              <span className="tb-ledger__label">
+                <span className="tb-ledger__name">{brand.name}</span>
+              </span>
+              <span className="tb-ledger__rail" aria-hidden="true" />
+            </div>
+          ))}
+        </div>
+        <div className="tb-fieldrow">
+          <TextField
+            label="Новый бренд"
+            value={newBrandName}
+            onChange={setNewBrandName}
+            placeholder="Например: DarkSide"
+          />
+          <Button onClick={createBrand}>Добавить</Button>
+        </div>
+      </Card>
+
+      {selectedVendor && (
+        <>
+          <Card>
+            <CardHead title={`Цены: ${selectedVendor.name}`} />
+            <p className="tb-subtitle">
+              Цена за килограмм. Цена пачки считается из неё: 100г — десятая часть, 250г — четверть.
+            </p>
+            {brands.map((brand) => {
+              const existing = prices.find((price) => price.brandId === brand.id);
+              return (
+                <div className="tb-stack" key={brand.id}>
+                  <div className="tb-ledger">
+                    <span className="tb-ledger__label">
+                      <span className="tb-ledger__name">{brand.name}</span>
+                    </span>
+                    <span className="tb-ledger__rail" aria-hidden="true" />
+                    <span className="tb-ledger__value">
+                      {existing ? (
+                        <>
+                          <span className="tb-num">{existing.pricePerKgEur}</span>
+                          <span className="tb-unit">€/кг</span>
+                        </>
+                      ) : (
+                        <span className="tb-ledger__note">не задано</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="tb-fieldrow">
+                    <TextField
+                      label={`${brand.name}, €/кг`}
+                      value={priceInputs[brand.id] ?? ''}
+                      onChange={(next) => setPriceInputs({ ...priceInputs, [brand.id]: next })}
+                      numeric
+                    />
+                    <Button onClick={() => savePrice(brand.id)}>Сохранить</Button>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+
+          <Card>
+            <CardHead title="Наличие по фото" />
+            <p className="tb-subtitle">
+              Загрузка заменяет наличие целиком для выбранной пары «бренд + граммовка».
+            </p>
+            <div className="tb-fieldrow">
+              <Select
+                label="Бренд"
+                value={uploadBrandId}
+                onChange={setUploadBrandId}
+                placeholder="Бренд..."
+                options={brands.map((brand) => ({ value: brand.id, label: brand.name }))}
+              />
+              <Select
+                label="Граммовка"
+                value={uploadWeightId}
+                onChange={setUploadWeightId}
+                placeholder="Граммовка..."
+                options={weights.map((weight) => ({
+                  value: weight.id,
+                  label: gramsLabel(weight.grams),
+                }))}
+              />
+            </div>
+            <span className="tb-field">
+              <label className="tb-field__label" htmlFor="availability-file">
+                Файл наличия
+              </label>
+              <input
+                id="availability-file"
+                className="tb-input"
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(event) => handleFileSelected(event.target.files?.[0])}
+              />
+            </span>
+            {uploading && <Banner>Распознаём вкусы на фото…</Banner>}
+
+            {proposedEntries && (
+              <>
+                <CardHead title="Проверь распознанное" />
+                <div className="tb-stack">
+                  {proposedEntries.map((entry, index) => (
+                    <Toggle
+                      key={entry.name}
+                      label={entry.name}
+                      pressed={entry.available}
+                      onChange={() => toggleEntry(index)}
+                    />
+                  ))}
+                </div>
+                <Button variant="primary" block onClick={confirmAvailability}>
+                  Сохранить наличие
+                </Button>
+              </>
+            )}
+          </Card>
         </>
       )}
-    </section>
+    </div>
   );
 }

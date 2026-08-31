@@ -4,14 +4,14 @@ import { createTestDb } from '../db/client';
 import { buildApp } from './app';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/client';
-import type { DocumentSender, RoundAnnouncer } from '../telegram/notify';
+import type { DocumentSender, OrderAnnouncer } from '../telegram/notify';
 
 describe('buildApp', () => {
   it('exposes GET /api/health without requiring auth', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
     const documentSender: DocumentSender = { sendDocument: vi.fn() };
-    const roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
@@ -21,7 +21,7 @@ describe('buildApp', () => {
       geminiClient,
       uploadsDir: '/tmp/uploads',
       documentSender,
-      roundAnnouncer,
+      orderAnnouncer,
     });
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(200);
@@ -32,7 +32,7 @@ describe('buildApp', () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
     const documentSender: DocumentSender = { sendDocument: vi.fn() };
-    const roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
@@ -42,7 +42,7 @@ describe('buildApp', () => {
       geminiClient,
       uploadsDir: '/tmp/uploads',
       documentSender,
-      roundAnnouncer,
+      orderAnnouncer,
       onApiReady: async (api) => {
         api.get('/test-protected', async () => ({ ok: true }));
       },
@@ -56,7 +56,7 @@ describe('buildApp', () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
     const documentSender: DocumentSender = { sendDocument: vi.fn() };
-    const roundAnnouncer: RoundAnnouncer = { announceRoundOpened: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const lines: string[] = [];
     const stream = new Writable({
       write(chunk, _enc, cb) {
@@ -73,7 +73,7 @@ describe('buildApp', () => {
       geminiClient,
       uploadsDir: '/tmp/uploads',
       documentSender,
-      roundAnnouncer,
+      orderAnnouncer,
       logger: { stream },
     });
     // Registered outside the authenticated /api context so the error handler is

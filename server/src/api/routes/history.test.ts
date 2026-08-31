@@ -4,8 +4,8 @@ import { createTestDb } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound, closeRound } from '../../domain/rounds';
-import { upsertOrderItem } from '../../domain/orders';
+import { createOrder, setOrderStatus } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
 import { users } from '../../db/schema';
 import { historyRoutes } from './history';
 import type { AuthedUser } from '../middleware/authenticate';
@@ -23,7 +23,7 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   return app;
 }
 
-async function seedClosedRoundWithFriendOrder() {
+async function seedFinishedOrderWithFriendOrder() {
   const db = createTestDb();
   await db.insert(users).values({ id: 1, telegramId: '1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() }).run();
   await db.insert(users).values({ id: 2, telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() }).run();
@@ -32,13 +32,14 @@ async function seedClosedRoundWithFriendOrder() {
   await setVendorBrandPrice(db, vendor.id, brand.id, 20);
   const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
   const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'CyberKiwi', available: true }] });
-  const round = await openRound(db, vendor.id, admin.id);
-  await upsertOrderItem(db, { roundId: round.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
-  await closeRound(db, round.id);
-  return { db, round };
+  const order = await createOrder(db, vendor.id, admin.id);
+  await upsertOrderItem(db, { orderId: order.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
+  await setOrderStatus(db, order.id, 'awaiting_validation');
+  await setOrderStatus(db, order.id, 'done');
+  return { db, order };
 }
 
-async function seedTwoClosedRounds() {
+async function seedTwoFinishedOrders() {
   const db = createTestDb();
   await db.insert(users).values({ id: 1, telegramId: '1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() }).run();
   await db.insert(users).values({ id: 2, telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() }).run();
@@ -50,59 +51,61 @@ async function seedTwoClosedRounds() {
   const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
   const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'CyberKiwi', available: true }] });
 
-  // Create and close round A with friend's order
-  const roundA = await openRound(db, vendor.id, admin.id);
-  await upsertOrderItem(db, { roundId: roundA.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
-  await closeRound(db, roundA.id);
+  // Order A, with friend's line, finished — which frees the vendor for the next one.
+  const orderA = await createOrder(db, vendor.id, admin.id);
+  await upsertOrderItem(db, { orderId: orderA.id, userId: friend.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 2 });
+  await setOrderStatus(db, orderA.id, 'awaiting_validation');
+  await setOrderStatus(db, orderA.id, 'done');
 
-  // Create and close round B with bystander's order (not friend's)
-  const roundB = await openRound(db, vendor.id, admin.id);
-  await upsertOrderItem(db, { roundId: roundB.id, userId: bystander.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
-  await closeRound(db, roundB.id);
+  // Order B at the same vendor, with the bystander's line instead.
+  const orderB = await createOrder(db, vendor.id, admin.id);
+  await upsertOrderItem(db, { orderId: orderB.id, userId: bystander.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+  await setOrderStatus(db, orderB.id, 'awaiting_validation');
+  await setOrderStatus(db, orderB.id, 'done');
 
-  return { db, roundA, roundB };
+  return { db, orderA, orderB };
 }
 
 describe('history routes', () => {
-  it('a member who did not order in the round does not see it in GET /', async () => {
-    const { db, round } = await seedClosedRoundWithFriendOrder();
+  it('a member who did not take part in the order does not see it in GET /', async () => {
+    const { db, order } = await seedFinishedOrderWithFriendOrder();
     const app = testApp(bystander, db);
     const res = await app.inject({ method: 'GET', url: '/api/history' });
     expect(res.json()).toEqual([]);
   });
 
-  it('per-round filtering: member sees only rounds they ordered in', async () => {
-    const { db, roundA, roundB } = await seedTwoClosedRounds();
-    // Friend ordered in roundA only, not in roundB
+  it('per-order filtering: a member sees only the orders they took part in', async () => {
+    const { db, orderA, orderB } = await seedTwoFinishedOrders();
+    // Friend ordered in orderA only, not in orderB
     const friendRes = await testApp(friend, db).inject({ method: 'GET', url: '/api/history' });
-    const friendRounds = friendRes.json();
-    expect(friendRounds).toHaveLength(1);
-    expect(friendRounds[0].id).toBe(roundA.id);
+    const friendOrders = friendRes.json();
+    expect(friendOrders).toHaveLength(1);
+    expect(friendOrders[0].id).toBe(orderA.id);
 
-    // Admin sees both closed rounds
+    // Admin sees both finished orders
     const adminRes = await testApp(admin, db).inject({ method: 'GET', url: '/api/history' });
-    const adminRounds = adminRes.json();
-    expect(adminRounds).toHaveLength(2);
-    expect(adminRounds.map((r: any) => r.id)).toContain(roundA.id);
-    expect(adminRounds.map((r: any) => r.id)).toContain(roundB.id);
+    const adminOrders = adminRes.json();
+    expect(adminOrders).toHaveLength(2);
+    expect(adminOrders.map((r: any) => r.id)).toContain(orderA.id);
+    expect(adminOrders.map((r: any) => r.id)).toContain(orderB.id);
   });
 
-  it('GET /:roundId returns the caller own summary for that round', async () => {
-    const { db, round } = await seedClosedRoundWithFriendOrder();
+  it('GET /:orderId returns the caller own summary for that order', async () => {
+    const { db, order } = await seedFinishedOrderWithFriendOrder();
     const app = testApp(friend, db);
-    const res = await app.inject({ method: 'GET', url: `/api/history/${round.id}` });
+    const res = await app.inject({ method: 'GET', url: `/api/history/${order.id}` });
     expect(res.json()).toMatchObject({ totalKg: 0.5, totalEur: 10, paid: false });
   });
 
-  it('GET /:roundId denies access to members without order items in that round', async () => {
-    const { db, roundA, roundB } = await seedTwoClosedRounds();
-    // Friend ordered in roundA but not roundB
+  it('GET /:orderId denies access to a member with no lines in that order', async () => {
+    const { db, orderA, orderB } = await seedTwoFinishedOrders();
+    // Friend ordered in orderA but not orderB
     const app = testApp(friend, db);
-    const res = await app.inject({ method: 'GET', url: `/api/history/${roundB.id}` });
+    const res = await app.inject({ method: 'GET', url: `/api/history/${orderB.id}` });
     expect(res.statusCode).toBe(404);
   });
 
-  it('GET /:roundId denies access to open rounds even for admins', async () => {
+  it('GET /:orderId denies access to an order that is still active, even for admins', async () => {
     const db = createTestDb();
     await db.insert(users).values({ id: 1, telegramId: '1', displayName: 'Admin', role: 'admin', firstSeenAt: new Date().toISOString() }).run();
     const vendor = await createVendor(db, 'Vasya');
@@ -110,10 +113,10 @@ describe('history routes', () => {
     await setVendorBrandPrice(db, vendor.id, brand.id, 20);
     const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
     const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'CyberKiwi', available: true }] });
-    const openRnd = await openRound(db, vendor.id, admin.id);
+    const active = await createOrder(db, vendor.id, admin.id);
 
     const app = testApp(admin, db);
-    const res = await app.inject({ method: 'GET', url: `/api/history/${openRnd.id}` });
+    const res = await app.inject({ method: 'GET', url: `/api/history/${active.id}` });
     expect(res.statusCode).toBe(404);
   });
 });

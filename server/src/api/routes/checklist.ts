@@ -28,12 +28,12 @@ export function checklistRoutes(db: Db) {
   return async function routes(api: FastifyInstance) {
     api.addHook('preHandler', requireAdmin);
 
-    api.get<{ Params: { roundId: string } }>('/', async (req) => {
-      const rows = await listChecklist(db, Number(req.params.roundId));
+    api.get<{ Params: { orderId: string } }>('/', async (req) => {
+      const rows = await listChecklist(db, Number(req.params.orderId));
       return Promise.all(rows.map((row) => toChecklistDto(db, row)));
     });
 
-    api.post<{ Params: { roundId: string; itemId: string }; Body: { delta: number } }>(
+    api.post<{ Params: { orderId: string; itemId: string }; Body: { delta: number } }>(
       '/:itemId/adjust',
       async (req) => {
         const row = await adjustReceivedQty(db, Number(req.params.itemId), req.body.delta);

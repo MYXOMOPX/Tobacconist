@@ -1,59 +1,104 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
+import type { AggregateLine, OrderDto } from '../types';
+import {
+  Badge,
+  Banner,
+  Card,
+  CardHead,
+  EmptyState,
+  LedgerRow,
+  ListSkeleton,
+  Money,
+  Row,
+  StatusBadge,
+  Weight,
+  gramsLabel,
+} from '../ui';
 
-type RoundSummary = {
-  id: number;
-  vendorId: number;
-  vendorName: string;
-  status: 'open' | 'closed';
-  openedAt: string;
-  closedAt: string | null;
-};
-type RoundDetail = {
-  round: RoundSummary;
-  items: unknown[];
+type OrderDetail = {
+  order: OrderDto;
+  items: AggregateLine[];
   totalKg: number;
   totalEur: number;
   paid: boolean;
 };
 
 export function HistoryPage() {
-  const [rounds, setRounds] = useState<RoundSummary[]>([]);
-  const [selected, setSelected] = useState<RoundDetail | null>(null);
+  const [orders, setOrders] = useState<OrderDto[]>([]);
+  const [selected, setSelected] = useState<OrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
 
   useEffect(() => {
     run(async () => {
-      setRounds(await api.get<RoundSummary[]>('/history'));
-    });
+      setOrders(await api.get<OrderDto[]>('/history'));
+    }).finally(() => setLoading(false));
   }, [run]);
 
-  function openRound(id: number) {
+  function openOrder(id: number) {
     return run(async () => {
-      setSelected(await api.get<RoundDetail>(`/history/${id}`));
+      setSelected(await api.get<OrderDetail>(`/history/${id}`));
     });
   }
 
   return (
-    <section>
-      <h2>История закупок</h2>
-      {error && <p role="alert">{error}</p>}
-      <ul>
-        {rounds.map((r) => (
-          <li key={r.id}>
-            <button onClick={() => openRound(r.id)}>
-              {r.vendorName} — {r.closedAt}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {selected && (
-        <h3>
-          {selected.round.vendorName}: {selected.totalKg.toFixed(2)} кг, {selected.totalEur.toFixed(2)} € —{' '}
-          {selected.paid ? 'оплачено' : 'не оплачено'}
-        </h3>
+    <div className="tb-page">
+      <h1 className="tb-title">История закупок</h1>
+      {error && <Banner tone="danger">{error}</Banner>}
+
+      {loading ? (
+        <ListSkeleton />
+      ) : orders.length === 0 ? (
+        <EmptyState
+          title="Здесь пока пусто"
+          text="Завершённые и отменённые заказы остаются тут вместе с составом и оплатами."
+        />
+      ) : (
+        <div className="tb-stack">
+          {orders.map((order) => (
+            <Row
+              key={order.id}
+              label={order.vendorName}
+              note={new Date(order.statusChangedAt).toLocaleDateString('ru-RU')}
+              trailing={<StatusBadge status={order.status} />}
+              onClick={() => openOrder(order.id)}
+            />
+          ))}
+        </div>
       )}
-    </section>
+
+      {selected && (
+        <Card>
+          <CardHead
+            title={selected.order.vendorName}
+            trailing={<Badge>{selected.paid ? 'Оплачено' : 'Не оплачено'}</Badge>}
+          />
+          {selected.items.map((item) => (
+            <LedgerRow
+              key={`${item.brandId}:${item.flavorId}:${item.weightId}`}
+              name={`${item.brandName} ${item.flavorName}`}
+              meta={gramsLabel(item.grams)}
+              quantity={item.quantity}
+              amount={item.totalEur}
+              note={
+                item.deliveredQty !== null && item.deliveredQty !== item.quantity
+                  ? `досталось ${item.deliveredQty}`
+                  : undefined
+              }
+            />
+          ))}
+          <div className="tb-card__head">
+            <span className="tb-subtitle">Общий вес</span>
+            <Weight kg={selected.totalKg} />
+          </div>
+          <div className="tb-card__head">
+            <span>Итого</span>
+            <Money value={selected.totalEur} tone="accent" />
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }

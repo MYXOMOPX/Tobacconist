@@ -5,7 +5,7 @@ import { loadConfig, type Config } from './config.js';
 import { createDb } from './db/client.js';
 import { createGeminiClient } from './gemini/client.js';
 import { createBot } from './telegram/bot.js';
-import { createDocumentSender, createRoundAnnouncer } from './telegram/notify.js';
+import { createDocumentSender, createOrderAnnouncer } from './telegram/notify.js';
 import { buildApp } from './api/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,7 @@ export function createServer(config: Config) {
     botInfo: config.botInfo,
   });
   const documentSender = createDocumentSender(bot);
-  const roundAnnouncer = createRoundAnnouncer({
+  const orderAnnouncer = createOrderAnnouncer({
     sender: bot.api,
     groupChatId: config.groupChatId,
     miniAppUrl: config.publicUrl,
@@ -37,7 +37,7 @@ export function createServer(config: Config) {
     geminiClient,
     uploadsDir: path.join(path.dirname(config.dbPath === ':memory:' ? '.' : config.dbPath), 'uploads'),
     documentSender,
-    roundAnnouncer,
+    orderAnnouncer,
     miniAppDistPath: path.resolve(__dirname, '../../mini-app/dist'),
   });
 

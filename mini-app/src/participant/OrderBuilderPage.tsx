@@ -1,82 +1,81 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
-
-type AssortmentRow = {
-  brandId: number;
-  brandName: string;
-  flavorId: number;
-  flavorName: string;
-  weightId: number;
-  grams: number;
-  available: boolean;
-};
-type AggregateLine = {
-  brandId: number;
-  brandName: string;
-  flavorId: number;
-  flavorName: string;
-  weightId: number;
-  grams: number;
-  quantity: number;
-  totalEur: number;
-  available: boolean;
-};
-type MyOrder = {
-  round: { id: number; vendorId: number; status: string } | null;
-  items: AggregateLine[];
-  totalKg: number;
-  totalEur: number;
-  hasUnavailableItems: boolean;
-};
+import type { AssortmentRow, MyOrderDto } from '../types';
+import {
+  Banner,
+  Button,
+  Card,
+  CardHead,
+  EmptyState,
+  LedgerRow,
+  ListSkeleton,
+  Money,
+  StatusBadge,
+  Stepper,
+  StickyBar,
+  Weight,
+  gramsLabel,
+} from '../ui';
 
 function lineKey(brandId: number, flavorId: number, weightId: number) {
   return `${brandId}:${flavorId}:${weightId}`;
 }
 
-export function OrderBuilderPage() {
+export function OrderBuilderPage({ orderId, onBack }: { orderId: number; onBack: () => void }) {
   const [assortment, setAssortment] = useState<AssortmentRow[]>([]);
-  const [mine, setMine] = useState<MyOrder | null>(null);
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [mine, setMine] = useState<MyOrderDto | null>(null);
+  const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
 
-  async function reload() {
-    setAssortment(await api.get<AssortmentRow[]>('/orders/assortment'));
-    const myOrder = await api.get<MyOrder>('/orders/mine');
-    setMine(myOrder);
-    const q: Record<string, string> = {};
-    for (const item of myOrder.items) {
-      q[lineKey(item.brandId, item.flavorId, item.weightId)] = String(item.quantity);
-    }
-    setQuantities(q);
-  }
+  const reload = useCallback(async () => {
+    setAssortment(await api.get<AssortmentRow[]>(`/orders/${orderId}/assortment`));
+    setMine(await api.get<MyOrderDto>(`/orders/${orderId}/mine`));
+  }, [orderId]);
 
   useEffect(() => {
-    run(reload);
-  }, [run]);
+    setLoading(true);
+    run(reload).finally(() => setLoading(false));
+  }, [reload, run]);
 
-  function saveQuantity(row: AssortmentRow) {
+  function setQuantity(row: AssortmentRow, quantity: number) {
     return run(async () => {
-      const key = lineKey(row.brandId, row.flavorId, row.weightId);
-      const quantity = Number(quantities[key] ?? 0);
-      await api.put('/orders/items', {
+      await api.put(`/orders/${orderId}/items`, {
         brandId: row.brandId,
         flavorId: row.flavorId,
         weightId: row.weightId,
         quantity,
       });
-      setMine(await api.get<MyOrder>('/orders/mine'));
+      setMine(await api.get<MyOrderDto>(`/orders/${orderId}/mine`));
     });
   }
 
-  if (!mine?.round) {
+  function setReady(ready: boolean) {
+    return run(async () => {
+      await api.post(`/orders/${orderId}/ready`, { ready });
+      setMine(await api.get<MyOrderDto>(`/orders/${orderId}/mine`));
+    });
+  }
+
+  if (loading) {
     return (
-      <section>
-        {error && <p role="alert">{error}</p>}
-        <p>Сейчас нет активной закупки.</p>
-      </section>
+      <div className="tb-page">
+        <ListSkeleton />
+      </div>
     );
   }
+
+  if (!mine) {
+    return (
+      <div className="tb-page">
+        {error && <Banner tone="danger">{error}</Banner>}
+        <EmptyState title="Заказ не открывается" text="Вернись к списку и попробуй ещё раз." />
+        <Button onClick={onBack}>К списку заказов</Button>
+      </div>
+    );
+  }
+
+  const locked = mine.order.status !== 'ordering';
 
   const byBrand = new Map<string, AssortmentRow[]>();
   for (const row of assortment) {
@@ -85,54 +84,93 @@ export function OrderBuilderPage() {
     byBrand.set(row.brandName, list);
   }
 
+  const quantityOf = (row: AssortmentRow) =>
+    mine.items.find(
+      (item) =>
+        item.brandId === row.brandId &&
+        item.flavorId === row.flavorId &&
+        item.weightId === row.weightId
+    )?.quantity ?? 0;
+
   return (
-    <section>
-      <h2>Мой заказ</h2>
-      {error && <p role="alert">{error}</p>}
-      {[...byBrand.entries()].map(([brandName, rows]) => (
-        <div key={brandName}>
-          <h3>{brandName}</h3>
-          <ul>
-            {rows.map((row) => {
-              const key = lineKey(row.brandId, row.flavorId, row.weightId);
-              return (
-                <li key={key}>
-                  <label>
-                    {row.flavorName} - {row.grams}г
-                    <input
-                      type="number"
-                      min={0}
-                      value={quantities[key] ?? ''}
-                      onChange={(e) => setQuantities({ ...quantities, [key]: e.target.value })}
-                      onBlur={() => saveQuantity(row)}
-                    />
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+    <div className="tb-page">
+      <header className="tb-card__head">
+        <div className="tb-row__label">
+          <h1 className="tb-title">{mine.order.vendorName}</h1>
+          <button type="button" className="tb-btn tb-btn--ghost" onClick={onBack}>
+            ← Все заказы
+          </button>
         </div>
+        <StatusBadge status={mine.order.status} />
+      </header>
+
+      {error && <Banner tone="danger">{error}</Banner>}
+      {locked && <Banner tone="warning">Добавление позиций закрыто, идёт сверка с продавцом</Banner>}
+      {mine.hasUnavailableItems && (
+        <Banner tone="warning">Часть позиций больше не в наличии — реши, оставляем их или убираем</Banner>
+      )}
+
+      {[...byBrand.entries()].map(([brandName, rows]) => (
+        <Card key={brandName}>
+          <CardHead title={brandName} />
+          {rows.map((row) => (
+            <div className="tb-ledger" key={lineKey(row.brandId, row.flavorId, row.weightId)}>
+              <span className="tb-ledger__label">
+                <span className="tb-ledger__name">{row.flavorName}</span>
+                <span className="tb-ledger__meta">{gramsLabel(row.grams)}</span>
+              </span>
+              <span className="tb-ledger__rail" aria-hidden="true" />
+              <Stepper
+                value={quantityOf(row)}
+                onChange={(next) => setQuantity(row, next)}
+                disabled={locked}
+                label={`${row.flavorName} ${gramsLabel(row.grams)}`}
+              />
+            </div>
+          ))}
+        </Card>
       ))}
 
       {mine.items.length > 0 && (
-        <div>
-          <h3>Ваш заказ</h3>
-          <ul>
-            {mine.items.map((item) => (
-              <li key={lineKey(item.brandId, item.flavorId, item.weightId)}>
-                {item.brandName} - {item.flavorName} - {item.grams}г: x{item.quantity}
-                {!item.available && <strong> больше не в наличии</strong>}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card>
+          <CardHead title="Твои позиции" />
+          {mine.items.map((item) => (
+            <LedgerRow
+              key={lineKey(item.brandId, item.flavorId, item.weightId)}
+              name={`${item.brandName} ${item.flavorName}`}
+              meta={gramsLabel(item.grams)}
+              quantity={item.quantity}
+              amount={item.totalEur}
+              unavailable={!item.available}
+              note={
+                item.deliveredQty !== null && item.deliveredQty !== item.quantity
+                  ? `досталось ${item.deliveredQty}`
+                  : item.available
+                    ? undefined
+                    : 'больше не в наличии'
+              }
+            />
+          ))}
+        </Card>
       )}
 
-      <h3>Итого</h3>
-      <p>
-        {mine.totalKg.toFixed(2)} кг, {mine.totalEur.toFixed(2)} €
-      </p>
-      {mine.hasUnavailableItems && <p role="alert">Часть позиций больше не в наличии</p>}
-    </section>
+      <StickyBar
+        summary={
+          <>
+            <span className="tb-subtitle">Твой заказ: {mine.items.length} поз.</span>
+            <span>
+              <Money value={mine.totalEur} tone="accent" /> · <Weight kg={mine.totalKg} tone="muted" />
+            </span>
+          </>
+        }
+        action={
+          locked ? undefined : (
+            <Button variant={mine.ready ? 'secondary' : 'primary'} onClick={() => setReady(!mine.ready)}>
+              {mine.ready ? 'Ещё выбираю' : 'Я готов'}
+            </Button>
+          )
+        }
+      />
+    </div>
   );
 }

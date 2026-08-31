@@ -7,12 +7,18 @@ vi.mock('./apiClient', () => ({
   api: {
     get: vi.fn(async (path: string) => {
       if (path === '/me') return { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
-      if (path === '/rounds/active') return null;
+      if (path === '/orders') return [];
       if (path === '/history')
-        return [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' }];
-      if (path === '/rounds/7')
-        return { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'closed', openedAt: '', closedAt: '2026-08-01' };
-      if (path === '/rounds/7/snapshot') return { text: '', table: [] };
+        return [
+          {
+            id: 7,
+            vendorId: 1,
+            vendorName: 'Vasya',
+            status: 'done',
+            createdAt: '2026-08-01T00:00:00.000Z',
+            statusChangedAt: '2026-08-01T00:00:00.000Z',
+          },
+        ];
       return [];
     }),
     post: vi.fn(),
@@ -25,24 +31,24 @@ describe('App', () => {
   it('renders the admin shell once /api/me resolves', async () => {
     render(<App />);
     await screen.findByTestId('shell');
-    expect(screen.getByText('Раунд')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Заказы' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('switches to the catalog tab', async () => {
+  it('switches to the vendors tab', async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByTestId('shell');
 
-    await user.click(screen.getByText('Каталог'));
-    expect(await screen.findByText('Барыги')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Барыги' }));
+    expect(await screen.findByText('Барыги и цены')).toBeInTheDocument();
   });
 
-  it('gives the admin a history tab that lists closed rounds', async () => {
+  it('gives the admin a history tab that lists past orders', async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByTestId('shell');
 
-    await user.click(screen.getByText('История'));
+    await user.click(screen.getByRole('button', { name: 'История' }));
     expect(await screen.findByText('История закупок')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Vasya/ })).toBeInTheDocument();
   });

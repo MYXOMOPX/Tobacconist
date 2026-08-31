@@ -1,0 +1,722 @@
+/*
+ * Component styles. Every selector here is a single flat class so nothing in a
+ * page can accidentally out-specify a component; layout spacing is owned by the
+ * component, not by the screen around it.
+ *
+ * Colours, sizes and radii come only from tokens.css.
+ */
+
+/* ---------- Page scaffolding ---------- */
+
+.tb-page {
+  padding: var(--tb-space-md);
+  padding-bottom: calc(var(--tb-space-xl) * 3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-md);
+}
+
+.tb-title {
+  margin: 0;
+  font-size: var(--tb-size-h1);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.tb-subtitle {
+  margin: 0;
+  font-size: var(--tb-size-small);
+  color: var(--tb-text-muted);
+}
+
+.tb-section-label {
+  font-size: var(--tb-size-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tb-text-muted);
+}
+
+/* ---------- Numerals ---------- */
+
+.tb-num {
+  font-family: var(--tb-font-num);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.tb-num--lg {
+  font-size: var(--tb-size-num-lg);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tb-num--muted {
+  color: var(--tb-text-muted);
+}
+
+.tb-num--accent {
+  color: var(--tb-primary);
+}
+
+.tb-unit {
+  font-family: var(--tb-font-num);
+  font-weight: 600;
+  color: var(--tb-text-muted);
+  margin-left: 0.35em;
+}
+
+.tb-num--lg + .tb-unit {
+  font-size: calc(var(--tb-size-num-lg) * 0.6);
+}
+
+/* ---------- Card ---------- */
+
+.tb-card {
+  background: var(--tb-surface);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  padding: var(--tb-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-sm);
+}
+
+.tb-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tb-space-sm);
+}
+
+.tb-card__title {
+  margin: 0;
+  font-size: var(--tb-size-h2);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ---------- Ledger row: the receipt line ---------- */
+/* Name on the left, figures on the right, a dotted rail carrying the eye
+   across — the same shape as the printout the admin sends the vendor. */
+
+.tb-ledger {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tb-space-sm);
+  min-height: 28px;
+}
+
+.tb-ledger__label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tb-space-sm);
+  /* Shrinks so a long flavour name ellipsises instead of pushing the figures
+     off the screen — the numbers on the right always stay readable. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.tb-ledger__name {
+  font-size: var(--tb-size-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tb-ledger__meta {
+  font-family: var(--tb-font-num);
+  font-size: var(--tb-size-small);
+  color: var(--tb-text-muted);
+  flex-shrink: 0;
+}
+
+.tb-ledger__rail {
+  flex: 1;
+  border-bottom: 1px dotted var(--tb-rail);
+  transform: translateY(-4px);
+  min-width: var(--tb-space-md);
+}
+
+.tb-ledger__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tb-space-sm);
+  flex-shrink: 0;
+}
+
+.tb-ledger--unavailable .tb-ledger__name {
+  color: var(--tb-text-disabled);
+  text-decoration: line-through;
+}
+
+.tb-ledger__note {
+  font-size: var(--tb-size-label);
+  color: var(--tb-text-muted);
+}
+
+/* ---------- Status badge ---------- */
+/* Filled while the order is alive, outlined once it is over. */
+
+.tb-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--tb-radius-full);
+  padding: 4px 10px;
+  font-size: var(--tb-size-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.tb-badge--ordering {
+  background: var(--tb-status-ordering);
+  color: var(--tb-status-ordering-ink);
+}
+
+.tb-badge--awaiting {
+  background: var(--tb-status-awaiting);
+  color: var(--tb-status-awaiting-ink);
+}
+
+.tb-badge--done {
+  color: var(--tb-status-done);
+  border-color: var(--tb-status-done);
+}
+
+.tb-badge--rejected {
+  color: var(--tb-status-rejected);
+  border-color: var(--tb-status-rejected);
+}
+
+.tb-badge--neutral {
+  color: var(--tb-text-muted);
+  border-color: var(--tb-border);
+}
+
+/* ---------- Buttons ---------- */
+
+.tb-btn {
+  appearance: none;
+  min-height: var(--tb-tap);
+  padding: 12px 20px;
+  border-radius: var(--tb-radius-lg);
+  border: 1px solid transparent;
+  font-family: var(--tb-font);
+  font-size: var(--tb-size-body);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.tb-btn--block {
+  width: 100%;
+}
+
+.tb-btn--primary {
+  background: var(--tb-primary);
+  color: var(--tb-on-primary);
+}
+
+.tb-btn--primary:active:not(:disabled) {
+  background: var(--tb-primary-pressed);
+}
+
+.tb-btn--secondary {
+  background: var(--tb-surface);
+  color: var(--tb-text);
+  border-color: var(--tb-border);
+}
+
+.tb-btn--secondary:active:not(:disabled) {
+  background: var(--tb-surface-raised);
+}
+
+.tb-btn--destructive {
+  background: transparent;
+  color: var(--tb-status-rejected);
+  border-color: var(--tb-status-rejected);
+}
+
+.tb-btn--ghost {
+  background: transparent;
+  color: var(--tb-primary);
+  min-height: auto;
+  padding: 8px 4px;
+  border-radius: var(--tb-radius-sm);
+}
+
+.tb-btn:disabled {
+  background: var(--tb-surface);
+  color: var(--tb-text-disabled);
+  border-color: var(--tb-border);
+  cursor: not-allowed;
+}
+
+/* ---------- Stepper ---------- */
+
+.tb-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tb-space-xs);
+  background: var(--tb-surface-raised);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-full);
+  padding: 2px;
+}
+
+.tb-stepper__btn {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--tb-radius-full);
+  background: transparent;
+  color: var(--tb-text);
+  font-family: var(--tb-font-num);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tb-stepper__btn:active:not(:disabled) {
+  background: var(--tb-surface);
+}
+
+.tb-stepper__btn:disabled {
+  color: var(--tb-text-disabled);
+  cursor: not-allowed;
+}
+
+.tb-stepper__value {
+  min-width: 28px;
+  text-align: center;
+  font-family: var(--tb-font-num);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Chips ---------- */
+
+.tb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tb-space-sm);
+}
+
+.tb-chip {
+  appearance: none;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: var(--tb-radius-full);
+  border: 1px solid var(--tb-border);
+  background: transparent;
+  color: var(--tb-text-muted);
+  font-family: var(--tb-font-num);
+  font-size: var(--tb-size-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tb-chip--selected {
+  border-color: var(--tb-primary);
+  color: var(--tb-primary);
+}
+
+.tb-chip--unavailable {
+  color: var(--tb-text-disabled);
+  border-style: dashed;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+/* ---------- Banner ---------- */
+
+.tb-banner {
+  display: flex;
+  gap: var(--tb-space-sm);
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  border-radius: var(--tb-radius-sm);
+  border-left: 3px solid var(--tb-text-muted);
+  background: var(--tb-surface);
+  font-size: var(--tb-size-small);
+  color: var(--tb-text);
+}
+
+.tb-banner--warning {
+  border-left-color: var(--tb-status-awaiting);
+}
+
+.tb-banner--danger {
+  border-left-color: var(--tb-status-rejected);
+}
+
+/* ---------- Toggle (paid) ---------- */
+
+.tb-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tb-space-md);
+  width: 100%;
+  min-height: var(--tb-tap);
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  background: var(--tb-surface);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  color: var(--tb-text);
+  font-family: var(--tb-font);
+  font-size: var(--tb-size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tb-toggle__label {
+  flex: 1;
+}
+
+.tb-toggle__box {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--tb-radius-sm);
+  border: 1px solid var(--tb-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tb-toggle[aria-pressed='true'] .tb-toggle__box {
+  background: var(--tb-status-ordering);
+  border-color: var(--tb-status-ordering);
+  color: var(--tb-status-ordering-ink);
+}
+
+/* ---------- Fields ---------- */
+
+.tb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.tb-field__label {
+  font-size: var(--tb-size-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tb-text-muted);
+}
+
+.tb-input {
+  width: 100%;
+  min-height: var(--tb-tap);
+  padding: 10px 12px;
+  background: var(--tb-bg);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-sm);
+  color: var(--tb-text);
+  font-family: var(--tb-font);
+  font-size: var(--tb-size-body);
+}
+
+.tb-input:focus {
+  border-color: var(--tb-primary);
+}
+
+.tb-input::placeholder {
+  color: var(--tb-text-disabled);
+}
+
+/* Money and weights are typed as well as read in monospace, so the field and
+   the value it becomes look like the same number. */
+.tb-input--num {
+  font-family: var(--tb-font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-fieldrow {
+  display: flex;
+  gap: var(--tb-space-sm);
+  align-items: flex-end;
+}
+
+/* ---------- Progress ---------- */
+
+.tb-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-sm);
+}
+
+.tb-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.tb-progress__track {
+  height: 6px;
+  border-radius: var(--tb-radius-full);
+  background: var(--tb-surface-raised);
+  overflow: hidden;
+}
+
+.tb-progress__fill {
+  height: 100%;
+  background: var(--tb-primary);
+  border-radius: var(--tb-radius-full);
+  transition: width 200ms ease;
+}
+
+/* ---------- Snapshot block ---------- */
+
+.tb-snapshot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-sm);
+}
+
+.tb-snapshot__text {
+  margin: 0;
+  padding: var(--tb-space-md);
+  background: var(--tb-bg);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-sm);
+  font-family: var(--tb-font-num);
+  font-size: var(--tb-size-small);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.tb-snapshot__actions {
+  display: flex;
+  gap: var(--tb-space-sm);
+}
+
+.tb-snapshot__actions .tb-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: var(--tb-space-sm);
+  padding-right: var(--tb-space-sm);
+}
+
+/* ---------- Skeleton ---------- */
+
+.tb-skeleton {
+  background: var(--tb-surface);
+  border-radius: var(--tb-radius-md);
+  animation: tb-pulse 1400ms ease-in-out infinite;
+}
+
+.tb-skeleton--card {
+  height: 96px;
+}
+
+.tb-skeleton--line {
+  height: 14px;
+  border-radius: var(--tb-radius-sm);
+}
+
+@keyframes tb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------- Empty / error states ---------- */
+
+.tb-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  padding: var(--tb-space-xl) var(--tb-space-md);
+  text-align: center;
+}
+
+.tb-state__title {
+  margin: 0;
+  font-size: var(--tb-size-h2);
+  font-weight: 600;
+}
+
+.tb-state__text {
+  margin: 0;
+  font-size: var(--tb-size-small);
+  color: var(--tb-text-muted);
+  max-width: 32ch;
+}
+
+/* ---------- Sticky summary bar ---------- */
+
+.tb-sticky {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tb-space-md);
+  padding: var(--tb-space-md);
+  padding-bottom: calc(var(--tb-space-md) + var(--tb-safe-bottom));
+  background: var(--tb-surface-raised);
+  border-top: 1px solid var(--tb-border);
+}
+
+/* Same bar, laid out in the flow — used on screens that already own the bottom
+   edge, and in the kit preview. */
+.tb-sticky--inline {
+  position: static;
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  padding-bottom: var(--tb-space-md);
+}
+
+.tb-sticky__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ---------- Tab bar ---------- */
+/* One treatment, everywhere it appears. */
+
+.tb-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--tb-surface);
+  border-top: 1px solid var(--tb-border);
+  padding-bottom: var(--tb-safe-bottom);
+}
+
+.tb-tabbar__item {
+  appearance: none;
+  flex: 1;
+  min-height: var(--tb-tap);
+  padding: 12px 4px;
+  background: transparent;
+  border: none;
+  border-top: 2px solid transparent;
+  color: var(--tb-text-muted);
+  font-family: var(--tb-font);
+  font-size: var(--tb-size-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tb-tabbar__item--active {
+  color: var(--tb-primary);
+  border-top-color: var(--tb-primary);
+}
+
+/* ---------- Bottom sheet ---------- */
+
+.tb-sheet__scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.tb-sheet {
+  width: 100%;
+  background: var(--tb-surface-raised);
+  border-top-left-radius: var(--tb-radius-lg);
+  border-top-right-radius: var(--tb-radius-lg);
+  padding: var(--tb-space-lg);
+  padding-bottom: calc(var(--tb-space-lg) + var(--tb-safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-md);
+  text-align: left;
+}
+
+.tb-sheet__handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--tb-radius-full);
+  background: var(--tb-border);
+  align-self: center;
+}
+
+.tb-sheet__title {
+  margin: 0;
+  font-size: var(--tb-size-h2);
+  font-weight: 600;
+}
+
+/* ---------- Selectable list row (vendors, participants) ---------- */
+
+.tb-row {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tb-space-md);
+  min-height: var(--tb-tap);
+  padding: var(--tb-space-md);
+  background: var(--tb-surface);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  color: var(--tb-text);
+  font-family: var(--tb-font);
+  font-size: var(--tb-size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tb-row:disabled {
+  color: var(--tb-text-disabled);
+  cursor: not-allowed;
+}
+
+.tb-row__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tb-row__note {
+  font-size: var(--tb-size-small);
+  color: var(--tb-text-muted);
+}
+
+.tb-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-sm);
+}
+
+.tb-divider {
+  height: 1px;
+  background: var(--tb-border);
+  border: none;
+  margin: var(--tb-space-sm) 0;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminCatalogPage } from './AdminCatalogPage';
 import { api, uploadAvailabilityImage } from '../apiClient';
@@ -24,16 +24,34 @@ beforeEach(() => {
   vi.mocked(api.post).mockResolvedValue({});
 });
 
+/** The vendor and brand forms both end in "Добавить" — scope to the right one. */
+function addButtonFor(fieldLabel: string) {
+  const row = screen.getByLabelText(fieldLabel).closest('.tb-fieldrow') as HTMLElement;
+  return within(row).getByRole('button', { name: 'Добавить' });
+}
+
 describe('AdminCatalogPage', () => {
   it('creates a new vendor from the input field', async () => {
     const user = userEvent.setup();
     render(<AdminCatalogPage />);
     await screen.findByText('Vasya');
 
-    await user.type(screen.getByPlaceholderText('Новый барыга'), 'Kolya');
-    await user.click(screen.getByText('Добавить барыгу'));
+    await user.type(screen.getByLabelText('Новый барыга'), 'Kolya');
+    await user.click(addButtonFor('Новый барыга'));
 
     expect(api.post).toHaveBeenCalledWith('/admin/vendors', { name: 'Kolya' });
+  });
+
+  it('saves a price per kilogram for a brand', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.put).mockResolvedValue({});
+    render(<AdminCatalogPage />);
+
+    await user.click(await screen.findByText('Vasya'));
+    await user.type(await screen.findByLabelText('DarkSide, €/кг'), '42');
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(api.put).toHaveBeenCalledWith('/admin/vendors/1/prices/1', { pricePerKgEur: 42 });
   });
 
   it('uploads an image, shows the proposed entries, and confirms them', async () => {
@@ -44,16 +62,16 @@ describe('AdminCatalogPage', () => {
     render(<AdminCatalogPage />);
 
     await user.click(await screen.findByText('Vasya'));
-    await user.selectOptions(screen.getByDisplayValue('Бренд...'), '1');
-    await user.selectOptions(screen.getByDisplayValue('Граммовка...'), '1');
+    await user.selectOptions(await screen.findByLabelText('Бренд'), '1');
+    await user.selectOptions(screen.getByLabelText('Граммовка'), '1');
 
     const file = new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' });
-    const fileInput = screen.getByLabelText('Файл наличия', { selector: 'input' }) as HTMLInputElement;
+    const fileInput = screen.getByLabelText('Файл наличия') as HTMLInputElement;
     await user.upload(fileInput, file);
 
     expect(await screen.findByText('CyberKiwi')).toBeInTheDocument();
 
-    await user.click(screen.getByText('Сохранить наличие'));
+    await user.click(screen.getByRole('button', { name: 'Сохранить наличие' }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith('/admin/availability/confirm', {
         vendorId: 1,
@@ -70,11 +88,11 @@ describe('AdminCatalogPage', () => {
     render(<AdminCatalogPage />);
 
     await user.click(await screen.findByText('Vasya'));
-    await user.selectOptions(screen.getByDisplayValue('Бренд...'), '1');
-    await user.selectOptions(screen.getByDisplayValue('Граммовка...'), '1');
+    await user.selectOptions(await screen.findByLabelText('Бренд'), '1');
+    await user.selectOptions(screen.getByLabelText('Граммовка'), '1');
 
     const file = new File(['bytes'], 'photo.jpg', { type: 'image/jpeg' });
-    const fileInput = screen.getByLabelText('Файл наличия', { selector: 'input' }) as HTMLInputElement;
+    const fileInput = screen.getByLabelText('Файл наличия') as HTMLInputElement;
     await user.upload(fileInput, file);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('failed to parse availability image');
@@ -89,8 +107,8 @@ describe('AdminCatalogPage', () => {
     render(<AdminCatalogPage />);
     await screen.findByText('Vasya');
 
-    await user.type(screen.getByPlaceholderText('Новый барыга'), 'Kolya');
-    await user.click(screen.getByText('Добавить барыгу'));
+    await user.type(screen.getByLabelText('Новый барыга'), 'Kolya');
+    await user.click(addButtonFor('Новый барыга'));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('vendor name already used');
   });

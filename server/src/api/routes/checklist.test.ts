@@ -5,8 +5,8 @@ import { createTestDb, schema } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound } from '../../domain/rounds';
-import { upsertOrderItem } from '../../domain/orders';
+import { createOrder } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
 import { generateOrUpdateChecklist } from '../../domain/checklist';
 import { checklistRoutes } from './checklist';
 import type { AuthedUser } from '../middleware/authenticate';
@@ -19,11 +19,11 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>) {
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
   });
-  app.register(checklistRoutes(db), { prefix: '/api/rounds/:roundId/checklist' });
+  app.register(checklistRoutes(db), { prefix: '/api/orders/:orderId/checklist' });
   return app;
 }
 
-async function seedClosedRoundChecklist() {
+async function seedChecklistOnValidation() {
   const db = createTestDb();
   // Create users for foreign key constraints
   await db
@@ -42,39 +42,39 @@ async function seedClosedRoundChecklist() {
     weightId: w250.id,
     entries: [{ name: 'CyberKiwi', available: true }],
   });
-  const round = await openRound(db, vendor.id, admin.id);
-  await upsertOrderItem(db, { roundId: round.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 5 });
-  await generateOrUpdateChecklist(db, round.id);
-  return { db, round };
+  const order = await createOrder(db, vendor.id, admin.id);
+  await upsertOrderItem(db, { orderId: order.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 5 });
+  await generateOrUpdateChecklist(db, order.id);
+  return { db, order };
 }
 
 describe('checklist routes', () => {
   it('GET / returns checklist rows with resolved names', async () => {
-    const { db, round } = await seedClosedRoundChecklist();
+    const { db, order } = await seedChecklistOnValidation();
     const app = testApp(admin, db);
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/checklist` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/checklist` });
     expect(res.json()).toEqual([
       expect.objectContaining({ brandName: 'DarkSide', flavorName: 'CyberKiwi', grams: 250, expectedQty: 5, receivedQty: 0 }),
     ]);
   });
 
   it('POST /:itemId/adjust bumps receivedQty by delta', async () => {
-    const { db, round } = await seedClosedRoundChecklist();
+    const { db, order } = await seedChecklistOnValidation();
     const app = testApp(admin, db);
-    const list = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/checklist` });
+    const list = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/checklist` });
     const itemId = list.json()[0].id;
     const res = await app.inject({
       method: 'POST',
-      url: `/api/rounds/${round.id}/checklist/${itemId}/adjust`,
+      url: `/api/orders/${order.id}/checklist/${itemId}/adjust`,
       payload: { delta: 2 },
     });
     expect(res.json().receivedQty).toBe(2);
   });
 
   it('rejects GET / as a non-admin with 403', async () => {
-    const { db, round } = await seedClosedRoundChecklist();
+    const { db, order } = await seedChecklistOnValidation();
     const app = testApp(member, db);
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/checklist` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/checklist` });
     expect(res.statusCode).toBe(403);
   });
 });

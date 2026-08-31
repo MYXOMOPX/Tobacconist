@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import type { RoundDto, AggregateLineDto } from './index';
+import type { OrderDto, AggregateLineDto } from './index';
 
 describe('shared DTO types', () => {
-  it('RoundDto has status open|closed', () => {
-    const round: RoundDto = {
+  it('OrderDto carries one of the four lifecycle statuses', () => {
+    const order: OrderDto = {
       id: 1,
       vendorId: 1,
       vendorName: 'Vasya',
-      status: 'open',
-      openedAt: '2026-08-25T00:00:00.000Z',
-      closedAt: null,
+      status: 'ordering',
+      createdAt: '2026-08-25T00:00:00.000Z',
+      statusChangedAt: '2026-08-25T00:00:00.000Z',
     };
-    expect(round.status === 'open' || round.status === 'closed').toBe(true);
+    expect(['ordering', 'awaiting_validation', 'done', 'rejected']).toContain(order.status);
   });
 
   it('AggregateLineDto carries quantity and totalEur', () => {
@@ -23,6 +23,7 @@ describe('shared DTO types', () => {
       weightId: 1,
       grams: 250,
       quantity: 3,
+      deliveredQty: null,
       totalEur: 15.75,
       available: true,
     };

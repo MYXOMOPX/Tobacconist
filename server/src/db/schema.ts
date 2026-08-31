@@ -57,46 +57,56 @@ export const availabilityUploads = sqliteTable('availability_uploads', {
   createdAt: text('created_at').notNull(),
 });
 
-export const purchaseRounds = sqliteTable('purchase_rounds', {
+/** Spec §5: one order per vendor, at most one of them non-terminal at a time. */
+export const orders = sqliteTable('orders', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   vendorId: integer('vendor_id').notNull().references(() => vendors.id),
-  status: text('status', { enum: ['open', 'closed'] }).notNull(),
-  openedAt: text('opened_at').notNull(),
-  closedAt: text('closed_at'),
-  openedByUserId: integer('opened_by_user_id').notNull().references(() => users.id),
+  status: text('status', {
+    enum: ['ordering', 'awaiting_validation', 'done', 'rejected'],
+  }).notNull(),
+  createdAt: text('created_at').notNull(),
+  statusChangedAt: text('status_changed_at').notNull(),
+  createdByUserId: integer('created_by_user_id').notNull().references(() => users.id),
 });
 
-export const roundBrandPriceSnapshots = sqliteTable('round_brand_price_snapshots', {
+export const orderPriceSnapshots = sqliteTable('order_price_snapshots', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  roundId: integer('round_id').notNull().references(() => purchaseRounds.id),
+  orderId: integer('order_id').notNull().references(() => orders.id),
   brandId: integer('brand_id').notNull().references(() => brands.id),
   pricePerKgEur: real('price_per_kg_eur').notNull(),
 });
 
 export const orderItems = sqliteTable('order_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  roundId: integer('round_id').notNull().references(() => purchaseRounds.id),
+  orderId: integer('order_id').notNull().references(() => orders.id),
   userId: integer('user_id').notNull().references(() => users.id),
   brandId: integer('brand_id').notNull().references(() => brands.id),
   flavorId: integer('flavor_id').notNull().references(() => flavors.id),
   weightId: integer('weight_id').notNull().references(() => weights.id),
   quantity: integer('quantity').notNull(),
+  /** What this participant actually got, once the delivery was checked (§7.1). Null until then. */
+  deliveredQty: integer('delivered_qty'),
+  /** The participant themselves, or the admin who added the line on their behalf. */
+  addedByUserId: integer('added_by_user_id').notNull().references(() => users.id),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 
-export const roundPayments = sqliteTable('round_payments', {
+/** Readiness and payment for one (order, participant) pair — spec §3. */
+export const orderParticipants = sqliteTable('order_participants', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  roundId: integer('round_id').notNull().references(() => purchaseRounds.id),
+  orderId: integer('order_id').notNull().references(() => orders.id),
   userId: integer('user_id').notNull().references(() => users.id),
+  ready: integer('ready', { mode: 'boolean' }).notNull().default(false),
+  readyAt: text('ready_at'),
   paid: integer('paid', { mode: 'boolean' }).notNull().default(false),
-  markedAt: text('marked_at'),
-  markedByUserId: integer('marked_by_user_id').references(() => users.id),
+  paidMarkedAt: text('paid_marked_at'),
+  paidMarkedByUserId: integer('paid_marked_by_user_id').references(() => users.id),
 });
 
 export const deliveryChecklistItems = sqliteTable('delivery_checklist_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  roundId: integer('round_id').notNull().references(() => purchaseRounds.id),
+  orderId: integer('order_id').notNull().references(() => orders.id),
   brandId: integer('brand_id').notNull().references(() => brands.id),
   flavorId: integer('flavor_id').notNull().references(() => flavors.id),
   weightId: integer('weight_id').notNull().references(() => weights.id),

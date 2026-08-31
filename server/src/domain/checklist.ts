@@ -5,12 +5,12 @@ import { computeAggregateSummary } from './summary.js';
 
 export type ChecklistRow = typeof deliveryChecklistItems.$inferSelect;
 
-export async function generateOrUpdateChecklist(db: Db, roundId: number) {
-  const { lines } = await computeAggregateSummary(db, roundId);
+export async function generateOrUpdateChecklist(db: Db, orderId: number) {
+  const { lines } = await computeAggregateSummary(db, orderId);
   const existing = await db
     .select()
     .from(deliveryChecklistItems)
-    .where(eq(deliveryChecklistItems.roundId, roundId))
+    .where(eq(deliveryChecklistItems.orderId, orderId))
     .all();
 
   const seenIds = new Set<number>();
@@ -30,7 +30,7 @@ export async function generateOrUpdateChecklist(db: Db, roundId: number) {
       await db
         .insert(deliveryChecklistItems)
         .values({
-          roundId,
+          orderId,
           brandId: line.brandId,
           flavorId: line.flavorId,
           weightId: line.weightId,
@@ -52,8 +52,8 @@ export async function generateOrUpdateChecklist(db: Db, roundId: number) {
   }
 }
 
-export async function listChecklist(db: Db, roundId: number) {
-  return db.select().from(deliveryChecklistItems).where(eq(deliveryChecklistItems.roundId, roundId)).all();
+export async function listChecklist(db: Db, orderId: number) {
+  return db.select().from(deliveryChecklistItems).where(eq(deliveryChecklistItems.orderId, orderId)).all();
 }
 
 export async function adjustReceivedQty(db: Db, checklistItemId: number, delta: number) {

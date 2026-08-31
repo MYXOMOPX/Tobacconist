@@ -5,8 +5,8 @@ import { createTestDb, schema } from '../../db/client';
 import { createVendor, setVendorBrandPrice } from '../../domain/vendors';
 import { createBrand, getWeights } from '../../domain/catalog';
 import { replaceAvailability } from '../../domain/availability';
-import { openRound } from '../../domain/rounds';
-import { upsertOrderItem } from '../../domain/orders';
+import { createOrder } from '../../domain/orders';
+import { upsertOrderItem } from '../../domain/orderItems';
 import { snapshotRoutes } from './snapshot';
 import type { AuthedUser } from '../middleware/authenticate';
 import type { DocumentSender } from '../../telegram/notify';
@@ -14,7 +14,7 @@ import type { DocumentSender } from '../../telegram/notify';
 const admin: AuthedUser = { id: 1, telegramId: '1', displayName: 'Admin', role: 'admin' };
 const member: AuthedUser = { id: 2, telegramId: '2', displayName: 'Friend', role: 'member' };
 
-async function seedRoundWithOrder() {
+async function seedOrderWithLines() {
   const db = createTestDb();
   // Insert users into the database for foreign key constraints
   await db
@@ -34,9 +34,9 @@ async function seedRoundWithOrder() {
     weightId: w250.id,
     entries: [{ name: 'CyberKiwi', available: true }],
   });
-  const round = await openRound(db, vendor.id, admin.id);
-  await upsertOrderItem(db, { roundId: round.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 3 });
-  return { db, round };
+  const order = await createOrder(db, vendor.id, admin.id);
+  await upsertOrderItem(db, { orderId: order.id, userId: admin.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 3 });
+  return { db, order };
 }
 
 function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>, documentSender: DocumentSender) {
@@ -44,15 +44,15 @@ function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>, document
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
   });
-  app.register(snapshotRoutes(db, documentSender), { prefix: '/api/rounds/:roundId/snapshot' });
+  app.register(snapshotRoutes(db, documentSender), { prefix: '/api/orders/:orderId/snapshot' });
   return app;
 }
 
 describe('snapshot routes', () => {
-  it('GET / returns text and table for the round', async () => {
-    const { db, round } = await seedRoundWithOrder();
+  it('GET / returns text and table for the order', async () => {
+    const { db, order } = await seedOrderWithLines();
     const app = testApp(admin, db, { sendDocument: vi.fn() });
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/snapshot` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/snapshot` });
     expect(res.statusCode).toBe(200);
     expect(res.json().text).toContain('DarkSide - CyberKiwi - 250g - x3');
     expect(res.json().table).toEqual([
@@ -61,21 +61,21 @@ describe('snapshot routes', () => {
   });
 
   it('POST /export builds an XLSX and DMs it to the calling admin', async () => {
-    const { db, round } = await seedRoundWithOrder();
+    const { db, order } = await seedOrderWithLines();
     const sendDocument = vi.fn().mockResolvedValue(undefined);
     const app = testApp(admin, db, { sendDocument });
-    const res = await app.inject({ method: 'POST', url: `/api/rounds/${round.id}/snapshot/export` });
+    const res = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/snapshot/export` });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ sent: true });
     expect(sendDocument).toHaveBeenCalledTimes(1);
     expect(sendDocument.mock.calls[0][0]).toBe('1');
-    expect(sendDocument.mock.calls[0][2]).toBe(`order-round-${round.id}.xlsx`);
+    expect(sendDocument.mock.calls[0][2]).toBe(`order-${order.id}.xlsx`);
   });
 
   it('rejects a non-admin user with 403', async () => {
-    const { db, round } = await seedRoundWithOrder();
+    const { db, order } = await seedOrderWithLines();
     const app = testApp(member, db, { sendDocument: vi.fn() });
-    const res = await app.inject({ method: 'GET', url: `/api/rounds/${round.id}/snapshot` });
+    const res = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/snapshot` });
     expect(res.statusCode).toBe(403);
   });
 });
