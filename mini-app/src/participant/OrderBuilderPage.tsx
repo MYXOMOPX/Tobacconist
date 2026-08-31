@@ -8,7 +8,6 @@ import {
   Card,
   CardHead,
   EmptyState,
-  LedgerRow,
   ListSkeleton,
   Money,
   StatusBadge,
@@ -25,10 +24,13 @@ function lineKey(brandId: number, flavorId: number, weightId: number) {
 export function OrderBuilderPage({
   orderId,
   onBack,
+  onContinue,
   onManage,
 }: {
   orderId: number;
   onBack: () => void;
+  /** Steps to the composed order — the totals and the readiness switch live there now. */
+  onContinue: () => void;
   /** Only the admin gets this: it steps out of ordering and into moderation. */
   onManage?: () => void;
 }) {
@@ -55,13 +57,6 @@ export function OrderBuilderPage({
         weightId: row.weightId,
         quantity,
       });
-      setMine(await api.get<MyOrderDto>(`/orders/${orderId}/mine`));
-    });
-  }
-
-  function setReady(ready: boolean) {
-    return run(async () => {
-      await api.post(`/orders/${orderId}/ready`, { ready });
       setMine(await api.get<MyOrderDto>(`/orders/${orderId}/mine`));
     });
   }
@@ -146,29 +141,6 @@ export function OrderBuilderPage({
         </Card>
       ))}
 
-      {mine.items.length > 0 && (
-        <Card>
-          <CardHead title="Твои позиции" />
-          {mine.items.map((item) => (
-            <LedgerRow
-              key={lineKey(item.brandId, item.flavorId, item.weightId)}
-              name={`${item.brandName} ${item.flavorName}`}
-              meta={gramsLabel(item.grams)}
-              quantity={item.quantity}
-              amount={item.totalEur}
-              unavailable={!item.available}
-              note={
-                item.deliveredQty !== null && item.deliveredQty !== item.quantity
-                  ? `досталось ${item.deliveredQty}`
-                  : item.available
-                    ? undefined
-                    : 'больше не в наличии'
-              }
-            />
-          ))}
-        </Card>
-      )}
-
       <StickyBar
         summary={
           <>
@@ -179,11 +151,10 @@ export function OrderBuilderPage({
           </>
         }
         action={
-          locked ? undefined : (
-            <Button variant={mine.ready ? 'secondary' : 'primary'} onClick={() => setReady(!mine.ready)}>
-              {mine.ready ? 'Ещё выбираю' : 'Я готов'}
-            </Button>
-          )
+          // The composed order is always worth a look, locked or not.
+          <Button variant="primary" onClick={onContinue}>
+            Продолжить
+          </Button>
         }
       />
     </div>

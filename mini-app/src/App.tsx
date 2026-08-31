@@ -6,6 +6,7 @@ import { AdminOrderPage } from './admin/AdminOrderPage';
 import { VendorPage } from './admin/VendorPage';
 import { ActiveOrdersPage } from './participant/ActiveOrdersPage';
 import { OrderBuilderPage } from './participant/OrderBuilderPage';
+import { MyOrderPage } from './participant/MyOrderPage';
 import { HistoryPage } from './participant/HistoryPage';
 import { ErrorState, ListSkeleton, TabBar } from './ui';
 
@@ -43,6 +44,8 @@ export function App() {
    * deliberately, not the screen they are stuck on.
    */
   const [managing, setManaging] = useState(false);
+  /** Picking tobacco and reviewing the composed order are separate screens now. */
+  const [viewingMyOrder, setViewingMyOrder] = useState(false);
 
   function loadMe() {
     setError(null);
@@ -78,6 +81,7 @@ export function App() {
   function backToOrders() {
     setOpenOrderId(null);
     setManaging(false);
+    setViewingMyOrder(false);
   }
 
   return (
@@ -89,6 +93,7 @@ export function App() {
             onOpen={(id) => {
               setOpenOrderId(id);
               setManaging(false);
+              setViewingMyOrder(false);
             }}
             onManage={(id) => {
               setOpenOrderId(id);
@@ -101,10 +106,13 @@ export function App() {
             onBack={backToOrders}
             onLeaveManagement={() => setManaging(false)}
           />
+        ) : viewingMyOrder ? (
+          <MyOrderPage orderId={openOrderId} onBack={() => setViewingMyOrder(false)} />
         ) : (
           <OrderBuilderPage
             orderId={openOrderId}
             onBack={backToOrders}
+            onContinue={() => setViewingMyOrder(true)}
             onManage={isAdmin ? () => setManaging(true) : undefined}
           />
         ))}
@@ -126,6 +134,7 @@ export function App() {
           setOpenOrderId(null);
           setOpenVendorId(null);
           setManaging(false);
+          setViewingMyOrder(false);
           setTab(id);
         }}
       />
