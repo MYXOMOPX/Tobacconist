@@ -22,7 +22,16 @@ function lineKey(brandId: number, flavorId: number, weightId: number) {
   return `${brandId}:${flavorId}:${weightId}`;
 }
 
-export function OrderBuilderPage({ orderId, onBack }: { orderId: number; onBack: () => void }) {
+export function OrderBuilderPage({
+  orderId,
+  onBack,
+  onManage,
+}: {
+  orderId: number;
+  onBack: () => void;
+  /** Only the admin gets this: it steps out of ordering and into moderation. */
+  onManage?: () => void;
+}) {
   const [assortment, setAssortment] = useState<AssortmentRow[]>([]);
   const [mine, setMine] = useState<MyOrderDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +112,12 @@ export function OrderBuilderPage({ orderId, onBack }: { orderId: number; onBack:
         </div>
         <StatusBadge status={mine.order.status} />
       </header>
+
+      {onManage && (
+        <Button block onClick={onManage}>
+          Управление заказом
+        </Button>
+      )}
 
       {error && <Banner tone="danger">{error}</Banner>}
       {locked && <Banner tone="warning">Добавление позиций закрыто, идёт сверка с продавцом</Banner>}

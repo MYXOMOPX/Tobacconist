@@ -35,7 +35,7 @@ function addButtonFor(fieldLabel: string) {
 describe('AdminCatalogPage', () => {
   it('creates a new vendor from the input field', async () => {
     const user = userEvent.setup();
-    render(<AdminCatalogPage />);
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
     await screen.findByText('Vasya');
 
     await user.type(screen.getByLabelText('Новый барыга'), 'Kolya');
@@ -44,22 +44,10 @@ describe('AdminCatalogPage', () => {
     expect(api.post).toHaveBeenCalledWith('/admin/vendors', { name: 'Kolya' });
   });
 
-  it('saves a price per kilogram for a brand', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.put).mockResolvedValue({});
-    render(<AdminCatalogPage />);
-
-    await user.click(await screen.findByText('Vasya'));
-    await user.type(await screen.findByLabelText('DarkSide, €/кг'), '42');
-    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
-
-    expect(api.put).toHaveBeenCalledWith('/admin/vendors/1/prices/1', { pricePerKgEur: 42 });
-  });
-
   it('shows the error message when creating a vendor fails', async () => {
     const user = userEvent.setup();
     vi.mocked(api.post).mockRejectedValue(new Error('vendor name already used'));
-    render(<AdminCatalogPage />);
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
     await screen.findByText('Vasya');
 
     await user.type(screen.getByLabelText('Новый барыга'), 'Kolya');

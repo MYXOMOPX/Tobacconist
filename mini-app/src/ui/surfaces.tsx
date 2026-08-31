@@ -227,6 +227,47 @@ export function TabBar<T extends string>({
   );
 }
 
+/* ---------- Confirmation ---------- */
+
+/**
+ * Spec §11: destructive actions ask first. The question names what is about to
+ * happen rather than asking "are you sure", so the answer is an informed one.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  busy = false,
+}: {
+  open: boolean;
+  title: string;
+  body: ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <Sheet open={open} title={title} onClose={onCancel}>
+      <div className="tb-stack">{body}</div>
+      <button
+        type="button"
+        className="tb-btn tb-btn--destructive tb-btn--block"
+        disabled={busy}
+        onClick={onConfirm}
+      >
+        {confirmLabel}
+      </button>
+      <button type="button" className="tb-btn tb-btn--secondary tb-btn--block" onClick={onCancel}>
+        Отмена
+      </button>
+    </Sheet>
+  );
+}
+
 /* ---------- Bottom sheet ---------- */
 
 export function Sheet({

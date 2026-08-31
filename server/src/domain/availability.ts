@@ -88,6 +88,61 @@ export async function replaceAvailability(
   return Array.from(resultMap.values());
 }
 
+/**
+ * Sets one position by hand (spec §4). The insurance for when vision misread a
+ * flavour, the vendor named it in a message, or something sold out between
+ * screenshots — unlike a photo upload, this touches only the position named.
+ */
+export async function setFlavorAvailability(
+  db: Db,
+  params: {
+    vendorId: number;
+    brandId: number;
+    weightId: number;
+    available: boolean;
+    flavorId?: number;
+    flavorName?: string;
+  }
+) {
+  const { vendorId, brandId, weightId, available } = params;
+
+  const flavor = params.flavorId
+    ? await db.select().from(flavors).where(eq(flavors.id, params.flavorId)).get()
+    : params.flavorName?.trim()
+      ? await findOrCreateFlavor(db, brandId, params.flavorName.trim())
+      : null;
+  if (!flavor) throw new Error('flavor not found: pass an existing flavorId or a name to create');
+  if (flavor.brandId !== brandId) throw new Error('this flavor belongs to another brand');
+
+  const now = new Date().toISOString();
+  const existing = await db
+    .select()
+    .from(vendorFlavorAvailability)
+    .where(
+      and(
+        eq(vendorFlavorAvailability.vendorId, vendorId),
+        eq(vendorFlavorAvailability.flavorId, flavor.id),
+        eq(vendorFlavorAvailability.weightId, weightId)
+      )
+    )
+    .get();
+
+  if (existing) {
+    await db
+      .update(vendorFlavorAvailability)
+      .set({ available, updatedAt: now })
+      .where(eq(vendorFlavorAvailability.id, existing.id))
+      .run();
+  } else {
+    await db
+      .insert(vendorFlavorAvailability)
+      .values({ vendorId, flavorId: flavor.id, weightId, available, updatedAt: now })
+      .run();
+  }
+
+  return { flavorId: flavor.id, flavorName: flavor.name, brandId, weightId, available };
+}
+
 export type AvailabilityGroup = {
   brandId: number;
   weightId: number;

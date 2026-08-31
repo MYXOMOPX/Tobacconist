@@ -31,6 +31,7 @@ export {
   Banner,
   Card,
   CardHead,
+  ConfirmDialog,
   LedgerRow,
   Progress,
   Row,

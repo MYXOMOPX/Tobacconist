@@ -1,37 +1,71 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
-import type { MyOrderDto, OrderDto } from '../types';
-import { Banner, EmptyState, ListSkeleton, Money, Row, StatusBadge, Weight } from '../ui';
+import type { MyOrderDto, OrderDto, Vendor } from '../types';
+import {
+  Banner,
+  Button,
+  Card,
+  EmptyState,
+  ListSkeleton,
+  Money,
+  Row,
+  Sheet,
+  StatusBadge,
+  Weight,
+} from '../ui';
 
-type Card = { order: OrderDto; mine: MyOrderDto | null };
+type OrderCard = { order: OrderDto; mine: MyOrderDto | null };
 
 /**
  * Spec §5: several vendors can be collecting at once, so the participant picks
  * which order to open rather than landing in whichever one happens to be active.
+ *
+ * The admin sees exactly this list and orders from it like everybody else — the
+ * management view is one deliberate tap away, not the default.
  */
-export function ActiveOrdersPage({ onOpen }: { onOpen: (orderId: number) => void }) {
-  const [cards, setCards] = useState<Card[]>([]);
+export function ActiveOrdersPage({
+  isAdmin = false,
+  onOpen,
+  onManage,
+}: {
+  isAdmin?: boolean;
+  onOpen: (orderId: number) => void;
+  onManage?: (orderId: number) => void;
+}) {
+  const [cards, setCards] = useState<OrderCard[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [picking, setPicking] = useState(false);
   const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
 
   function load() {
     return run(async () => {
       const orders = await api.get<OrderDto[]>('/orders');
-      const withMine = await Promise.all(
-        orders.map(async (order) => ({
-          order,
-          mine: await api.get<MyOrderDto>(`/orders/${order.id}/mine`).catch(() => null),
-        }))
+      setCards(
+        await Promise.all(
+          orders.map(async (order) => ({
+            order,
+            mine: await api.get<MyOrderDto>(`/orders/${order.id}/mine`).catch(() => null),
+          }))
+        )
       );
-      setCards(withMine);
+      if (isAdmin) setVendors(await api.get<Vendor[]>('/admin/vendors'));
     });
   }
 
   useEffect(() => {
     load().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run]);
+  }, [run, isAdmin]);
+
+  function startOrder(vendorId: number) {
+    return run(async () => {
+      const created = await api.post<OrderDto>('/orders', { vendorId });
+      setPicking(false);
+      onOpen(created.id);
+    });
+  }
 
   if (loading) {
     return (
@@ -41,6 +75,8 @@ export function ActiveOrdersPage({ onOpen }: { onOpen: (orderId: number) => void
     );
   }
 
+  const activeByVendor = new Map(cards.map(({ order }) => [order.vendorId, order]));
+
   return (
     <div className="tb-page">
       <h1 className="tb-title">Активные заказы</h1>
@@ -49,29 +85,69 @@ export function ActiveOrdersPage({ onOpen }: { onOpen: (orderId: number) => void
       {cards.length === 0 ? (
         <EmptyState
           title="Активных заказов нет"
-          text="Как только админ откроет закупку у барыги, она появится здесь."
+          text={
+            isAdmin
+              ? 'Открой заказ у барыги — участники сразу увидят его в своём списке.'
+              : 'Как только админ откроет закупку у барыги, она появится здесь.'
+          }
         />
       ) : (
         <div className="tb-stack">
           {cards.map(({ order, mine }) => (
-            <Row
-              key={order.id}
-              label={order.vendorName}
-              note={
-                mine && mine.items.length > 0 ? (
-                  <>
-                    у тебя {mine.items.length} поз. · <Money value={mine.totalEur} /> ·{' '}
-                    <Weight kg={mine.totalKg} tone="muted" />
-                  </>
-                ) : (
-                  'ты ещё не заказывал'
-                )
-              }
-              trailing={<StatusBadge status={order.status} />}
-              onClick={() => onOpen(order.id)}
-            />
+            <Card key={order.id}>
+              <Row
+                label={order.vendorName}
+                note={
+                  mine && mine.items.length > 0 ? (
+                    <>
+                      у тебя {mine.items.length} поз. · <Money value={mine.totalEur} /> ·{' '}
+                      <Weight kg={mine.totalKg} tone="muted" />
+                    </>
+                  ) : (
+                    'ты ещё не заказывал'
+                  )
+                }
+                trailing={<StatusBadge status={order.status} />}
+                onClick={() => onOpen(order.id)}
+              />
+              {isAdmin && onManage && (
+                <Button block onClick={() => onManage(order.id)}>
+                  Управление
+                </Button>
+              )}
+            </Card>
           ))}
         </div>
+      )}
+
+      {isAdmin && (
+        <>
+          <Button variant="primary" block onClick={() => setPicking(true)}>
+            Новый заказ
+          </Button>
+
+          <Sheet open={picking} title="У кого закупаемся?" onClose={() => setPicking(false)}>
+            {vendors.filter((vendor) => !vendor.archived).length === 0 ? (
+              <EmptyState title="Барыг ещё нет" text="Заведи барыгу на вкладке «Барыги»." />
+            ) : (
+              vendors
+                .filter((vendor) => !vendor.archived)
+                .map((vendor) => {
+                  const busy = activeByVendor.get(vendor.id);
+                  return (
+                    <Row
+                      key={vendor.id}
+                      label={vendor.name}
+                      note={busy ? 'уже есть активный заказ' : undefined}
+                      trailing={busy ? <StatusBadge status={busy.status} /> : undefined}
+                      disabled={Boolean(busy)}
+                      onClick={() => startOrder(vendor.id)}
+                    />
+                  );
+                })
+            )}
+          </Sheet>
+        </>
       )}
     </div>
   );

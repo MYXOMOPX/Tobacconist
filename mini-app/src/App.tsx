@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from './apiClient';
 import type { Me } from './types';
 import { AdminCatalogPage } from './admin/AdminCatalogPage';
-import { AdminOrdersPage } from './admin/AdminOrdersPage';
 import { AdminOrderPage } from './admin/AdminOrderPage';
+import { VendorPage } from './admin/VendorPage';
 import { ActiveOrdersPage } from './participant/ActiveOrdersPage';
 import { OrderBuilderPage } from './participant/OrderBuilderPage';
 import { HistoryPage } from './participant/HistoryPage';
@@ -37,6 +37,12 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('orders');
   const [openOrderId, setOpenOrderId] = useState<number | null>(orderFromLink);
+  const [openVendorId, setOpenVendorId] = useState<number | null>(null);
+  /**
+   * The admin orders like everybody else; management is a place they step into
+   * deliberately, not the screen they are stuck on.
+   */
+  const [managing, setManaging] = useState(false);
 
   function loadMe() {
     setError(null);
@@ -69,26 +75,48 @@ export function App() {
   // staring at nothing.
   const active: Tab = !isAdmin && tab === 'vendors' ? 'orders' : tab;
 
-  function openOrders() {
+  function backToOrders() {
     setOpenOrderId(null);
-    setTab('orders');
+    setManaging(false);
   }
 
   return (
     <div data-testid="shell">
       {active === 'orders' &&
-        (isAdmin ? (
-          openOrderId === null ? (
-            <AdminOrdersPage onOpen={setOpenOrderId} />
-          ) : (
-            <AdminOrderPage orderId={openOrderId} onBack={openOrders} />
-          )
-        ) : openOrderId === null ? (
-          <ActiveOrdersPage onOpen={setOpenOrderId} />
+        (openOrderId === null ? (
+          <ActiveOrdersPage
+            isAdmin={isAdmin}
+            onOpen={(id) => {
+              setOpenOrderId(id);
+              setManaging(false);
+            }}
+            onManage={(id) => {
+              setOpenOrderId(id);
+              setManaging(true);
+            }}
+          />
+        ) : managing && isAdmin ? (
+          <AdminOrderPage
+            orderId={openOrderId}
+            onBack={backToOrders}
+            onLeaveManagement={() => setManaging(false)}
+          />
         ) : (
-          <OrderBuilderPage orderId={openOrderId} onBack={openOrders} />
+          <OrderBuilderPage
+            orderId={openOrderId}
+            onBack={backToOrders}
+            onManage={isAdmin ? () => setManaging(true) : undefined}
+          />
         ))}
-      {active === 'vendors' && isAdmin && <AdminCatalogPage />}
+
+      {active === 'vendors' &&
+        isAdmin &&
+        (openVendorId === null ? (
+          <AdminCatalogPage onOpenVendor={setOpenVendorId} />
+        ) : (
+          <VendorPage vendorId={openVendorId} onBack={() => setOpenVendorId(null)} />
+        ))}
+
       {active === 'history' && <HistoryPage />}
 
       <TabBar
@@ -96,6 +124,8 @@ export function App() {
         active={active}
         onSelect={(id) => {
           setOpenOrderId(null);
+          setOpenVendorId(null);
+          setManaging(false);
           setTab(id);
         }}
       />

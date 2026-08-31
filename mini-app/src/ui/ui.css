@@ -641,6 +641,8 @@
   padding: 0;
   display: flex;
   align-items: flex-end;
+  /* The sheet scrolls inside itself; the scrim never does. */
+  overflow: hidden;
 }
 
 .tb-sheet {
@@ -654,6 +656,18 @@
   flex-direction: column;
   gap: var(--tb-space-md);
   text-align: left;
+  /* A long list (every vendor, every flavour) has to stay reachable: cap the
+     sheet below the viewport and let it scroll, or its top is simply cut off. */
+  max-height: 85vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The grab handle and the title stay put while the list under them scrolls. */
+.tb-sheet__handle,
+.tb-sheet__title {
+  flex-shrink: 0;
 }
 
 .tb-sheet__handle {

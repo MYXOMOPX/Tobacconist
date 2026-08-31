@@ -29,7 +29,16 @@ import {
 type Allocations = Record<number, number>;
 
 /** Everything the admin does to one order: composition, delivery, money (spec §5–§8). */
-export function AdminOrderPage({ orderId, onBack }: { orderId: number; onBack: () => void }) {
+export function AdminOrderPage({
+  orderId,
+  onBack,
+  onLeaveManagement,
+}: {
+  orderId: number;
+  onBack: () => void;
+  /** Back to ordering as a participant: the admin buys tobacco too. */
+  onLeaveManagement?: () => void;
+}) {
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
   const [snapshot, setSnapshot] = useState<SnapshotDto | null>(null);
@@ -223,6 +232,12 @@ export function AdminOrderPage({ orderId, onBack }: { orderId: number; onBack: (
       </header>
 
       {error && <Banner tone="danger">{error}</Banner>}
+
+      {onLeaveManagement && (
+        <Button block onClick={onLeaveManagement}>
+          К своему заказу
+        </Button>
+      )}
 
       <Card>
         <CardHead
