@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('./telegram', () => ({ getInitData: () => 'fake-init-data' }));
+vi.mock('./telegram', () => ({ authHeaders: () => ({ 'X-Telegram-Init-Data': 'fake-init-data' }) }));
 
 import { api } from './apiClient';
 

@@ -65,7 +65,7 @@ cd mini-app
 npm run dev
 ```
 
-Vite dev-сервер проксирует `/api/*` на `http://localhost:3000`, поэтому сервер должен быть запущен параллельно. Открывать Mini App внутри самого Telegram (например через `ngrok` + указание адреса в BotFather) — SDK `window.Telegram.WebApp` плохо эмулируется вне Telegram.
+Vite dev-сервер проксирует `/api/*` на `http://localhost:3000`, поэтому сервер должен быть запущен параллельно. В обычном режиме Mini App надо открывать внутри самого Telegram (например через `ngrok` + указание адреса в BotFather) — SDK `window.Telegram.WebApp` вне Telegram не работает. С `DEV_NO_TELEGRAM=true` (см. выше) страница открывается прямо в браузере: SDK не найдётся, мини-апп спросит имя и запомнит его в localStorage (сбросить — очистить ключ `tb-dev-user`).
 
 ## Тесты
 

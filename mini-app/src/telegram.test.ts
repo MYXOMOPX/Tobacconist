@@ -1,21 +1,31 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { getInitData } from './telegram';
+import { authHeaders } from './telegram';
 
-describe('getInitData', () => {
+describe('authHeaders', () => {
   afterEach(() => {
     delete (window as any).Telegram;
+    window.localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it('throws when the Telegram WebApp SDK is not present', () => {
-    expect(() => getInitData()).toThrow(/Telegram WebApp SDK/);
-  });
-
-  it('returns initData and calls ready/expand when the SDK is present', () => {
+  it('signs with init data and wakes the SDK when running inside Telegram', () => {
     const ready = vi.fn();
     const expand = vi.fn();
     (window as any).Telegram = { WebApp: { initData: 'abc123', ready, expand } };
-    expect(getInitData()).toBe('abc123');
+    expect(authHeaders()).toEqual({ 'X-Telegram-Init-Data': 'abc123' });
     expect(ready).toHaveBeenCalled();
     expect(expand).toHaveBeenCalled();
+  });
+
+  it('asks for a name outside Telegram and remembers it', () => {
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('  Ann  ');
+    expect(authHeaders()).toEqual({ 'X-Dev-User': 'Ann' });
+    expect(authHeaders()).toEqual({ 'X-Dev-User': 'Ann' });
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to guess when the name is left empty', () => {
+    vi.spyOn(window, 'prompt').mockReturnValue(null);
+    expect(() => authHeaders()).toThrow(/Без имени/);
   });
 });

@@ -1,4 +1,4 @@
-import { getInitData } from './telegram';
+import { authHeaders } from './telegram';
 
 const BASE_URL = '/api';
 
@@ -12,7 +12,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     method,
     headers: {
       'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': getInitData(),
+      ...authHeaders(),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -48,7 +48,7 @@ export async function uploadAvailabilityImage(
 
   const res = await fetch(`${BASE_URL}/admin/availability/parse`, {
     method: 'POST',
-    headers: { 'X-Telegram-Init-Data': getInitData() },
+    headers: authHeaders(),
     body: form,
   });
   if (!res.ok) return parseErrorAndThrow(res);
