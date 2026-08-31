@@ -194,7 +194,7 @@ export function UiKit() {
 
       <Section title="Слепок для барыги">
         <Card>
-          <Snapshot text={SNAPSHOT_TEXT} onCopy={() => {}} onExport={() => {}} />
+          <Snapshot text={SNAPSHOT_TEXT} onCopy={() => {}} />
         </Card>
       </Section>
 

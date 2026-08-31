@@ -113,12 +113,6 @@ export function AdminOrderPage({
     });
   }
 
-  function exportSnapshot() {
-    return run(async () => {
-      await api.post(`/orders/${orderId}/snapshot/export`);
-    });
-  }
-
   if (loading) {
     return (
       <div className="tb-page">
@@ -319,7 +313,6 @@ export function AdminOrderPage({
           <Snapshot
             text={snapshot.text}
             onCopy={() => navigator.clipboard?.writeText(snapshot.text)}
-            onExport={exportSnapshot}
           />
           {snapshot.table.map((row, index) => (
             <LedgerRow

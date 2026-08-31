@@ -15,8 +15,7 @@
     "@fastify/multipart": "^8.3.0",
     "@fastify/static": "^7.0.4",
     "grammy": "^1.28.0",
-    "@google/generative-ai": "^0.17.0",
-    "exceljs": "^4.4.0"
+    "@google/generative-ai": "^0.17.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",

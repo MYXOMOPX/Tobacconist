@@ -4,13 +4,12 @@ import { createTestDb } from '../db/client';
 import { buildApp } from './app';
 import type { ChatMemberApi } from '../telegram/auth';
 import type { GeminiClient } from '../gemini/client';
-import type { DocumentSender, OrderAnnouncer } from '../telegram/notify';
+import type { OrderAnnouncer } from '../telegram/notify';
 
 describe('buildApp', () => {
   it('exposes GET /api/health without requiring auth', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const documentSender: DocumentSender = { sendDocument: vi.fn() };
     const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
@@ -20,7 +19,6 @@ describe('buildApp', () => {
       chatMemberApi,
       geminiClient,
       uploadsDir: '/tmp/uploads',
-      documentSender,
       orderAnnouncer,
     });
     const res = await app.inject({ method: 'GET', url: '/api/health' });
@@ -31,7 +29,6 @@ describe('buildApp', () => {
   it('requires auth for routes registered inside the /api context', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const documentSender: DocumentSender = { sendDocument: vi.fn() };
     const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
@@ -41,7 +38,6 @@ describe('buildApp', () => {
       chatMemberApi,
       geminiClient,
       uploadsDir: '/tmp/uploads',
-      documentSender,
       orderAnnouncer,
       onApiReady: async (api) => {
         api.get('/test-protected', async () => ({ ok: true }));
@@ -55,7 +51,6 @@ describe('buildApp', () => {
   it('logs unexpected errors handled by the custom error handler', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const documentSender: DocumentSender = { sendDocument: vi.fn() };
     const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn() };
     const lines: string[] = [];
     const stream = new Writable({
@@ -72,7 +67,6 @@ describe('buildApp', () => {
       chatMemberApi,
       geminiClient,
       uploadsDir: '/tmp/uploads',
-      documentSender,
       orderAnnouncer,
       logger: { stream },
     });

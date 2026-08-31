@@ -13,7 +13,7 @@ import { summariesRoutes } from './routes/summaries.js';
 import { historyRoutes } from './routes/history.js';
 import type { ChatMemberApi } from '../telegram/auth.js';
 import type { GeminiClient } from '../gemini/client.js';
-import type { DocumentSender, OrderAnnouncer } from '../telegram/notify.js';
+import type { OrderAnnouncer } from '../telegram/notify.js';
 
 export function buildApp(deps: {
   db: Db;
@@ -23,7 +23,6 @@ export function buildApp(deps: {
   chatMemberApi: ChatMemberApi;
   geminiClient: GeminiClient;
   uploadsDir: string;
-  documentSender: DocumentSender;
   orderAnnouncer: OrderAnnouncer;
   miniAppDistPath?: string;
   onApiReady?: (api: FastifyInstance) => Promise<void>;
@@ -70,7 +69,7 @@ export function buildApp(deps: {
       api.register(catalogRoutes(deps.db), { prefix: '/admin' });
       api.register(availabilityRoutes(deps.db, deps.geminiClient, deps.uploadsDir), { prefix: '/admin/availability' });
       api.register(ordersRoutes(deps.db, deps.orderAnnouncer), { prefix: '/orders' });
-      api.register(snapshotRoutes(deps.db, deps.documentSender), { prefix: '/orders/:orderId/snapshot' });
+      api.register(snapshotRoutes(deps.db), { prefix: '/orders/:orderId/snapshot' });
       api.register(checklistRoutes(deps.db), { prefix: '/orders/:orderId/checklist' });
       api.register(paymentsRoutes(deps.db), { prefix: '/orders/:orderId/payments' });
       api.register(summariesRoutes(deps.db), { prefix: '/orders/:orderId/summaries' });

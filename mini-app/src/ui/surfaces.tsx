@@ -155,24 +155,13 @@ export function Progress({
 
 /* ---------- Snapshot for the vendor ---------- */
 
-export function Snapshot({
-  text,
-  onCopy,
-  onExport,
-}: {
-  text: string;
-  onCopy: () => void;
-  onExport: () => void;
-}) {
+export function Snapshot({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
     <div className="tb-snapshot">
       <pre className="tb-snapshot__text">{text}</pre>
       <div className="tb-snapshot__actions">
         <button type="button" className="tb-btn tb-btn--secondary tb-btn--block" onClick={onCopy}>
           Скопировать текст
-        </button>
-        <button type="button" className="tb-btn tb-btn--secondary tb-btn--block" onClick={onExport}>
-          Выгрузить файл
         </button>
       </div>
     </div>
