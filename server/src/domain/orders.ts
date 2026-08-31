@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { orders, orderPriceSnapshots, vendorBrandPrices } from '../db/schema.js';
 
@@ -37,11 +37,13 @@ export async function getOrder(db: Db, orderId: number): Promise<Order | null> {
   return row ?? null;
 }
 
+/** Newest first: the order just announced is the one people came to open. */
 export async function listActiveOrders(db: Db): Promise<Order[]> {
   return db
     .select()
     .from(orders)
     .where(inArray(orders.status, [...ACTIVE_STATUSES]))
+    .orderBy(desc(orders.createdAt), desc(orders.id))
     .all();
 }
 
@@ -54,11 +56,16 @@ export async function getActiveOrderForVendor(db: Db, vendorId: number): Promise
   return row ?? null;
 }
 
+/**
+ * History is read by "what closed last", not by "what opened last" — hence
+ * statusChangedAt, which for a finished order is the moment it finished.
+ */
 export async function listFinishedOrders(db: Db): Promise<Order[]> {
   return db
     .select()
     .from(orders)
     .where(inArray(orders.status, ['done', 'rejected']))
+    .orderBy(desc(orders.statusChangedAt), desc(orders.id))
     .all();
 }
 

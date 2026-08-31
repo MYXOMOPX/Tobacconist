@@ -220,11 +220,18 @@ export async function isAvailable(db: Db, vendorId: number, flavorId: number, we
   return row?.available ?? false;
 }
 
+/**
+ * Brand, then flavour, then weight — the order the list is read in, so a person
+ * scrolling for one flavour knows where it should be. Sorted here and not in SQL
+ * because SQLite compares text byte by byte: that puts Cyrillic after Latin and
+ * lowercase after uppercase, which is not the alphabet anybody expects.
+ */
 export async function listVendorAssortment(
   db: Db,
   vendorId: number,
   opts?: { onlyAvailable?: boolean }
 ) {
+  const byName = (a: string, b: string) => a.localeCompare(b, 'ru');
   const rows = await db
     .select({
       brandId: brands.id,
@@ -241,5 +248,13 @@ export async function listVendorAssortment(
     .innerJoin(weights, eq(weights.id, vendorFlavorAvailability.weightId))
     .where(eq(vendorFlavorAvailability.vendorId, vendorId))
     .all();
+
+  rows.sort(
+    (a, b) =>
+      byName(a.brandName, b.brandName) ||
+      byName(a.flavorName, b.flavorName) ||
+      a.grams - b.grams
+  );
+
   return opts?.onlyAvailable ? rows.filter((r) => r.available) : rows;
 }

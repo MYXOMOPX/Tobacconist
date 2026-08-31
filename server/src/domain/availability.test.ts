@@ -63,6 +63,34 @@ describe('availability domain', () => {
     expect(await isAvailable(db, vendor.id, cyberKiwiFlavorId, w100.id)).toBe(false);
   });
 
+  it('listVendorAssortment sorts by brand, then flavour, then weight', async () => {
+    const { db, vendor, w250, w100 } = await setup();
+    // Entered deliberately out of order, brands included.
+    const musthave = await createBrand(db, 'MustHave');
+    const adalya = await createBrand(db, 'Adalya');
+    for (const [brandId, weightId, name] of [
+      [musthave.id, w250.id, 'Пина Колада'],
+      [musthave.id, w100.id, 'Пина Колада'],
+      [musthave.id, w250.id, 'Ананас'],
+      [adalya.id, w250.id, 'Love 66'],
+    ] as const) {
+      await replaceAvailability(db, {
+        vendorId: vendor.id,
+        brandId,
+        weightId,
+        entries: [{ name, available: true }],
+      });
+    }
+
+    const rows = await listVendorAssortment(db, vendor.id);
+    expect(rows.map((r) => `${r.brandName} / ${r.flavorName} / ${r.grams}`)).toEqual([
+      'Adalya / Love 66 / 250',
+      'MustHave / Ананас / 250',
+      'MustHave / Пина Колада / 100',
+      'MustHave / Пина Колада / 250',
+    ]);
+  });
+
   it('listVendorAssortment onlyAvailable filters out unavailable rows', async () => {
     const { db, vendor, brand, w250 } = await setup();
     await replaceAvailability(db, {

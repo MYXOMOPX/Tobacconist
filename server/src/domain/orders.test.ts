@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
 import { createVendor, setVendorBrandPrice } from './vendors';
 import { createBrand } from './catalog';
-import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { orders, users } from '../db/schema';
 import {
   canTransition,
   createOrder,
@@ -25,6 +26,16 @@ async function setup() {
   const brand = await createBrand(db, 'DarkSide');
   await setVendorBrandPrice(db, vasya.id, brand.id, 42);
   return { db, admin, vasya, petya, brand };
+}
+
+type TestDb = Awaited<ReturnType<typeof setup>>['db'];
+
+function stampCreatedAt(db: TestDb, orderId: number, at: string) {
+  return db.update(orders).set({ createdAt: at }).where(eq(orders.id, orderId)).run();
+}
+
+function stampStatusChangedAt(db: TestDb, orderId: number, at: string) {
+  return db.update(orders).set({ statusChangedAt: at }).where(eq(orders.id, orderId)).run();
 }
 
 describe('order lifecycle', () => {
@@ -105,6 +116,35 @@ describe('order lifecycle', () => {
 
     const ids = (await listFinishedOrders(db)).map((order) => order.id);
     expect(ids.sort()).toEqual([finished.id, cancelled.id].sort());
+  });
+
+  it('lists active orders newest first', async () => {
+    const { db, admin, vasya, petya } = await setup();
+    const older = await createOrder(db, vasya.id, admin.id);
+    const newer = await createOrder(db, petya.id, admin.id);
+    // Both were opened in the same millisecond; spread them apart by hand so the
+    // test measures the ordering and not the clock.
+    await stampCreatedAt(db, older.id, '2026-01-01T10:00:00.000Z');
+    await stampCreatedAt(db, newer.id, '2026-01-02T10:00:00.000Z');
+
+    const ids = (await listActiveOrders(db)).map((order) => order.id);
+    expect(ids).toEqual([newer.id, older.id]);
+  });
+
+  it('lists finished orders by when they finished, latest first', async () => {
+    const { db, admin, vasya, petya } = await setup();
+    // Opened first, closed last — history has to follow the closing, not the opening.
+    const openedFirst = await createOrder(db, vasya.id, admin.id);
+    const openedSecond = await createOrder(db, petya.id, admin.id);
+    await stampCreatedAt(db, openedFirst.id, '2026-01-01T10:00:00.000Z');
+    await stampCreatedAt(db, openedSecond.id, '2026-01-02T10:00:00.000Z');
+    await setOrderStatus(db, openedSecond.id, 'rejected');
+    await setOrderStatus(db, openedFirst.id, 'rejected');
+    await stampStatusChangedAt(db, openedSecond.id, '2026-01-03T10:00:00.000Z');
+    await stampStatusChangedAt(db, openedFirst.id, '2026-01-04T10:00:00.000Z');
+
+    const ids = (await listFinishedOrders(db)).map((order) => order.id);
+    expect(ids).toEqual([openedFirst.id, openedSecond.id]);
   });
 
   it('describes the whole transition table', () => {
