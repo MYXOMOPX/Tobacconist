@@ -45,16 +45,6 @@ export async function upsertOrderItem(
     throw new Error(`the order is ${order.status}, it can no longer be changed`);
   }
 
-  const available = await isAvailable(db, order.vendorId, flavorId, weightId);
-  if (!available) throw new Error('this flavor/weight is not available for the order vendor');
-
-  // Without a price snapshot for this brand, summary/snapshot/finish would throw for
-  // the whole order (see summary.ts) — reject just this attempt instead.
-  if (quantity > 0) {
-    const pricePerKg = await getOrderPriceSnapshot(db, orderId, brandId);
-    if (pricePerKg === null) throw new Error('no price set for this brand yet');
-  }
-
   const existing = await db
     .select()
     .from(orderItems)
@@ -68,6 +58,22 @@ export async function upsertOrderItem(
       )
     )
     .get();
+
+  // Only asking for more needs the vendor to have it. A line already in the order
+  // outlives its flavour going out of stock — spec §12 keeps it and just flags it —
+  // and then the only thing left to do with it is shrink it or take it away, which
+  // the stock check used to make impossible.
+  if (quantity > (existing?.quantity ?? 0)) {
+    const available = await isAvailable(db, order.vendorId, flavorId, weightId);
+    if (!available) throw new Error('this flavor/weight is not available for the order vendor');
+  }
+
+  // Without a price snapshot for this brand, summary/snapshot/finish would throw for
+  // the whole order (see summary.ts) — reject just this attempt instead.
+  if (quantity > 0) {
+    const pricePerKg = await getOrderPriceSnapshot(db, orderId, brandId);
+    if (pricePerKg === null) throw new Error('no price set for this brand yet');
+  }
 
   // Spec §5: changing what you ordered retracts your "I'm done picking" mark.
   await clearReadiness(db, orderId, userId);
