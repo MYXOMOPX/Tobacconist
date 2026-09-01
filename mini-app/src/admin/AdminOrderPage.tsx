@@ -12,14 +12,15 @@ import {
   LedgerRow,
   ListSkeleton,
   Money,
+  Row,
   Snapshot,
   StatusBadge,
   Stepper,
-  Toggle,
   Weight,
   gramsLabel,
 } from '../ui';
 import { ChecklistPage } from './ChecklistPage';
+import { ParticipantCartPage } from './ParticipantCartPage';
 
 type Allocations = Record<number, number>;
 
@@ -53,6 +54,7 @@ export function AdminOrderPage({
   const [allocations, setAllocations] = useState<Allocations>({});
   const [distributing, setDistributing] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [cartUserId, setCartUserId] = useState<number | null>(null);
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
@@ -84,13 +86,6 @@ export function AdminOrderPage({
       setConfirmingClose(false);
       await reload();
       setChecking(true);
-    });
-  }
-
-  function togglePaid(userId: number, paid: boolean) {
-    return run(async () => {
-      await api.post(`/orders/${orderId}/payments/${userId}`, { paid });
-      setParticipants(await api.get<ParticipantSummary[]>(`/orders/${orderId}/summaries`));
     });
   }
 
@@ -137,6 +132,24 @@ export function AdminOrderPage({
         {error && <Banner tone="danger">{error}</Banner>}
         <Button onClick={onBack}>К списку заказов</Button>
       </div>
+    );
+  }
+
+  // Spec §11 screen 7: the admin steps into one participant's basket to fix it up.
+  if (cartUserId !== null) {
+    const participant = participants.find((p) => p.userId === cartUserId);
+    return (
+      <ParticipantCartPage
+        orderId={orderId}
+        userId={cartUserId}
+        displayName={participant?.displayName ?? ''}
+        status={order.status}
+        onBack={() => {
+          setCartUserId(null);
+          // Whatever changed inside the cart — quantities, payment — has to show up here too.
+          run(reload);
+        }}
+      />
     );
   }
 
@@ -262,20 +275,23 @@ export function AdminOrderPage({
         ) : (
           <>
             {participants.map((participant) => (
-              <Toggle
+              <Row
                 key={participant.userId}
                 label={participant.displayName}
-                pressed={participant.paid}
-                onChange={(next) => togglePaid(participant.userId, next)}
+                note={
+                  participant.paid
+                    ? 'оплачено'
+                    : participant.ready && order.status === 'ordering'
+                      ? 'готов'
+                      : undefined
+                }
                 trailing={
                   <span>
-                    {participant.ready && order.status === 'ordering' ? (
-                      <Badge tone="ordering">готов</Badge>
-                    ) : null}{' '}
                     <Money value={participant.totalEur} /> ·{' '}
                     <Weight kg={participant.totalKg} tone="muted" />
                   </span>
                 }
+                onClick={() => setCartUserId(participant.userId)}
               />
             ))}
             <div className="tb-card__head">

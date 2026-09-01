@@ -88,15 +88,20 @@ describe('AdminOrderPage — collecting', () => {
     expect(await screen.findByText('Сверка поставки')).toBeInTheDocument();
   });
 
-  it('marks a participant as paid', async () => {
+  it('opens the participant cart on tap, and returns to fresh totals', async () => {
     mockApi('ordering');
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: /Friend/ }));
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith('/orders/5/payments/2', { paid: true })
-    );
+    expect(await screen.findByRole('heading', { name: 'Friend' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '← К заказу' })).toBeInTheDocument();
+
+    // Coming back reloads the order — the cart may have changed totals or payment.
+    vi.mocked(api.get).mockClear();
+    await user.click(screen.getByRole('button', { name: '← К заказу' }));
+    expect(await screen.findByText('Участники')).toBeInTheDocument();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/orders/5/summaries'));
   });
 
   it('has no checklist while the order is still collecting', async () => {
@@ -205,12 +210,13 @@ describe('AdminOrderPage — finished', () => {
   });
 
   /** Money keeps moving after the order is closed — that is the point of §10. */
-  it('still marks who paid', async () => {
+  it('still marks who paid, from inside the participant cart', async () => {
     mockApi('done');
     const user = userEvent.setup();
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: /Friend/ }));
+    await user.click(await screen.findByRole('button', { name: 'Оплачено' }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith('/orders/5/payments/2', { paid: true })
