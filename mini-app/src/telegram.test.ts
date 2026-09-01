@@ -24,6 +24,15 @@ describe('authHeaders', () => {
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for a name when the SDK loaded but Telegram never launched the page', () => {
+    // telegram-web-app.js is on the page in a plain browser too — with empty initData.
+    const ready = vi.fn();
+    (window as any).Telegram = { WebApp: { initData: '', ready, expand: vi.fn() } };
+    vi.spyOn(window, 'prompt').mockReturnValue('Ann');
+    expect(authHeaders()).toEqual({ 'X-Dev-User': 'Ann' });
+    expect(ready).not.toHaveBeenCalled();
+  });
+
   it('refuses to guess when the name is left empty', () => {
     vi.spyOn(window, 'prompt').mockReturnValue(null);
     expect(() => authHeaders()).toThrow(/Без имени/);

@@ -31,7 +31,10 @@ function devUserName(): string {
  */
 export function authHeaders(): Record<string, string> {
   const webApp = getTelegramWebApp();
-  if (!webApp) return { 'X-Dev-User': devUserName() };
+  // telegram-web-app.js defines window.Telegram.WebApp in any browser, so the
+  // object being there proves nothing — only non-empty initData means Telegram
+  // actually launched this page and signed the launch.
+  if (!webApp?.initData) return { 'X-Dev-User': devUserName() };
 
   webApp.ready();
   webApp.expand();
