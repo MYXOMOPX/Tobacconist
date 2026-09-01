@@ -61,6 +61,11 @@ function applyMigrations(sqlite: Database.Database) {
 const drivers = new WeakMap<object, Database.Database>();
 
 export function createDb(filePath: string): Db {
+  // SQLite creates the file but not the folder holding it, and the default path
+  // points at a `data/` that is not in the repo — a first boot died on it.
+  if (filePath !== ':memory:') {
+    fs.mkdirSync(path.dirname(path.resolve(filePath)), { recursive: true });
+  }
   const sqlite = new Database(filePath);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');

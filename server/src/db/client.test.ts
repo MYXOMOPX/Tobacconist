@@ -100,6 +100,18 @@ describe('createDb against a persistent file', () => {
     expect(participants[0]).toMatchObject({ orderId: 1, userId: 2, paid: true, ready: false });
   });
 
+  it('creates the folder the database file lives in', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tobacconist-mkdir-'));
+    // The default DB_PATH points into a `data/` that ships with nothing in it.
+    const file = path.join(dir, 'data', 'tobacconist.sqlite3');
+
+    const db = createDb(file);
+    opened.push(db);
+
+    expect(fs.existsSync(file)).toBe(true);
+    expect((await db.select().from(weights).all()).length).toBe(2);
+  });
+
   it('does not re-run a migration that already ran', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tobacconist-twice-'));
     const file = path.join(dir, 'data.sqlite');
