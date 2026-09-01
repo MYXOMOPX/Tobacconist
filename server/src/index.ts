@@ -30,14 +30,14 @@ export function createServer(config: Config) {
         db,
         adminTelegramId: config.adminTelegramId,
         groupChatId: config.groupChatId,
-        miniAppUrl: config.publicUrl,
+        miniAppLink: config.miniAppLink,
         botInfo: config.botInfo,
       });
   const orderAnnouncer = bot
     ? createOrderAnnouncer({
         sender: bot.api,
         groupChatId: config.groupChatId,
-        miniAppUrl: config.publicUrl,
+        miniAppLink: config.miniAppLink,
       })
     : createLoggingOrderAnnouncer();
 
@@ -66,6 +66,11 @@ export async function main() {
   const { app, bot } = createServer(config);
   if (bot) {
     await bot.api.setWebhook(`${config.publicUrl}/telegram/webhook`);
+    if (!config.miniAppLink) {
+      console.warn(
+        'TELEGRAM_MINIAPP_LINK is not set — group announcements will go out without the "open the order" button'
+      );
+    }
   } else {
     console.log('[dev] DEV_NO_TELEGRAM=true — no bot, no webhook, identity from X-Dev-User');
     if (!config.geminiApiKey) {

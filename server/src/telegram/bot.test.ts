@@ -7,7 +7,7 @@ import { handleStartOrderCommand, handleStartOrderCallback } from './bot';
 
 const ADMIN_ID = '555';
 const GROUP_ID = '-1001';
-const MINI_APP_URL = 'https://example.com/app';
+const MINI_APP_LINK = 'https://t.me/testbot/order';
 
 function fakeCommandCtx(fromId: number | undefined, chatId: string | number | undefined) {
   return {
@@ -62,12 +62,12 @@ describe('handleStartOrderCallback', () => {
     const db = createTestDb();
     const vendor = await createVendor(db, 'Vasya');
     const ctx = fakeCallbackCtx(999, `start_order:${vendor.id}`);
-    await handleStartOrderCallback(ctx, { db, adminTelegramId: ADMIN_ID, groupChatId: GROUP_ID, miniAppUrl: MINI_APP_URL });
+    await handleStartOrderCallback(ctx, { db, adminTelegramId: ADMIN_ID, groupChatId: GROUP_ID, miniAppLink: MINI_APP_LINK });
     expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(await getActiveOrderForVendor(db, vendor.id)).toBeNull();
   });
 
-  it('opens the round, edits the picker message, and announces with a web_app button', async () => {
+  it('opens the round, edits the picker message, and announces with a link button', async () => {
     const db = createTestDb();
     const vendor = await createVendor(db, 'Vasya');
     const ctx = fakeCallbackCtx(555, `start_order:${vendor.id}`);
@@ -75,7 +75,7 @@ describe('handleStartOrderCallback', () => {
       db,
       adminTelegramId: ADMIN_ID,
       groupChatId: GROUP_ID,
-      miniAppUrl: MINI_APP_URL,
+      miniAppLink: MINI_APP_LINK,
     });
     expect(order?.vendorId).toBe(vendor.id);
     expect(ctx.editMessageText).toHaveBeenCalledTimes(1);
@@ -83,9 +83,10 @@ describe('handleStartOrderCallback', () => {
     const [chatId, text, opts] = ctx.api.sendMessage.mock.calls[0];
     expect(chatId).toBe(GROUP_ID);
     expect(text).toContain('Vasya');
+    // A group cannot carry a web_app button — see notify.ts.
     expect(opts.reply_markup.inline_keyboard[0][0]).toEqual({
-      text: '🛍 Заказать',
-      web_app: { url: `${MINI_APP_URL}?order=${order!.id}` },
+      text: '🛍 Открыть заказ',
+      url: `${MINI_APP_LINK}?startapp=order_${order!.id}`,
     });
   });
 
@@ -104,7 +105,7 @@ describe('handleStartOrderCallback', () => {
       db,
       adminTelegramId: ADMIN_ID,
       groupChatId: GROUP_ID,
-      miniAppUrl: MINI_APP_URL,
+      miniAppLink: MINI_APP_LINK,
     });
 
     // Reported in the chat rather than thrown at the user as a crash.
@@ -131,7 +132,7 @@ describe('handleStartOrderCallback', () => {
       db,
       adminTelegramId: ADMIN_ID,
       groupChatId: GROUP_ID,
-      miniAppUrl: MINI_APP_URL,
+      miniAppLink: MINI_APP_LINK,
     });
 
     expect(result?.vendorId).toBe(vendor2.id);

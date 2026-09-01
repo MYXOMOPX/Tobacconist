@@ -64,7 +64,7 @@ async function ensureAdminUser(db: Db, adminTelegramId: string) {
 
 export async function handleStartOrderCallback(
   ctx: StartOrderCallbackCtx,
-  deps: { db: Db; adminTelegramId: string; groupChatId: string; miniAppUrl: string }
+  deps: { db: Db; adminTelegramId: string; groupChatId: string; miniAppLink: string }
 ): Promise<Order | undefined> {
   await ctx.answerCallbackQuery();
 
@@ -83,7 +83,7 @@ export async function handleStartOrderCallback(
     await createOrderAnnouncer({
       sender: ctx.api,
       groupChatId: deps.groupChatId,
-      miniAppUrl: deps.miniAppUrl,
+      miniAppLink: deps.miniAppLink,
     }).announceOrderOpened(vendor?.name ?? '', order.id);
 
     return order;
@@ -99,7 +99,7 @@ export function createBot(deps: {
   db: Db;
   adminTelegramId: string;
   groupChatId: string;
-  miniAppUrl: string;
+  miniAppLink: string;
   botInfo?: UserFromGetMe;
 }): Bot {
   const bot = new Bot(deps.botToken, deps.botInfo ? { botInfo: deps.botInfo } : undefined);

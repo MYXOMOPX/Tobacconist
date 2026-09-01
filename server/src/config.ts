@@ -10,6 +10,13 @@ export type Config = {
   dbPath: string;
   port: number;
   publicUrl: string;
+  /**
+   * The Mini App's direct link from BotFather, e.g. `https://t.me/mybot/order`.
+   * Group announcements need it: a `web_app` button is only allowed in private
+   * chats, so from the group the only one-tap way in is a t.me link Telegram
+   * itself resolves. Empty means announcements go out without a button.
+   */
+  miniAppLink: string;
   botInfo?: UserFromGetMe;
   /**
    * Local debugging without Telegram: no bot, no signature check, identity comes
@@ -45,6 +52,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dbPath: env.DB_PATH ?? './data/tobacconist.sqlite3',
     port,
     publicUrl: requiredUnlessDev('PUBLIC_URL', `http://localhost:${port}`),
+    // Optional on purpose: an existing deploy must not refuse to boot because a
+    // new variable is missing. Without it the bot still posts, just without the
+    // button, and says so at startup.
+    miniAppLink: (env.TELEGRAM_MINIAPP_LINK ?? '').replace(/\/+$/, ''),
     devNoTelegram,
     devAdminName: env.DEV_ADMIN_NAME ?? '',
   };

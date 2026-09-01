@@ -8,6 +8,7 @@ import { ActiveOrdersPage } from './participant/ActiveOrdersPage';
 import { OrderBuilderPage } from './participant/OrderBuilderPage';
 import { MyOrderPage } from './participant/MyOrderPage';
 import { HistoryPage } from './participant/HistoryPage';
+import { orderFromLaunch } from './telegram';
 import { ErrorState, ListSkeleton, TabBar } from './ui';
 
 type Tab = 'orders' | 'vendors' | 'history';
@@ -23,21 +24,11 @@ const MEMBER_TABS: { id: Tab; label: string }[] = [
   { id: 'history', label: 'История' },
 ];
 
-/**
- * The bot's "🛍 Заказать" button carries the order it announced, so the person
- * lands on that order instead of guessing which one the message was about.
- */
-function orderFromLink(): number | null {
-  const raw = new URLSearchParams(window.location.search).get('order');
-  const id = Number(raw);
-  return raw && Number.isInteger(id) && id > 0 ? id : null;
-}
-
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('orders');
-  const [openOrderId, setOpenOrderId] = useState<number | null>(orderFromLink);
+  const [openOrderId, setOpenOrderId] = useState<number | null>(orderFromLaunch);
   const [openVendorId, setOpenVendorId] = useState<number | null>(null);
   /**
    * The admin orders like everybody else; management is a place they step into

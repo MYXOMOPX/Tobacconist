@@ -38,10 +38,25 @@ npm install
 | `GEMINI_API_KEY` | да | API-ключ Gemini |
 | `GEMINI_MODEL` | нет, по умолчанию `gemini-2.5-flash` | id модели vision. Google выводит старые id из обращения (`gemini-1.5-flash` начал отвечать 404) — тогда меняется здесь, без релиза кода |
 | `PUBLIC_URL` | да | публичный HTTPS-адрес бэкенда (используется для регистрации webhook) |
+| `TELEGRAM_MINIAPP_LINK` | почти да | прямая ссылка на Mini App из BotFather, например `https://t.me/mybot/order`. Без неё бот постит объявления **без кнопки** «Открыть заказ» (см. ниже) |
 | `DB_PATH` | нет, по умолчанию `./data/tobacconist.sqlite3` | путь к файлу SQLite |
 | `PORT` | нет, по умолчанию `3000` | порт HTTP-сервера |
 | `DEV_NO_TELEGRAM` | нет | `true` — запуск без Telegram, см. ниже. **Только для локалки** |
 | `DEV_ADMIN_NAME` | нет | при `DEV_NO_TELEGRAM=true` — имя, которое получает роль админа. Пусто: админом становится тот, кто зашёл первым |
+
+### Кнопка «Открыть заказ» в групповом чате
+
+Объявления бота в группе несут кнопку, открывающую Mini App сразу на нужном заказе. Кнопки типа `web_app` Telegram разрешает **только в приватных чатах** — в группе они отлетают с `400 BUTTON_TYPE_INVALID`. Поэтому в группе используется обычная url-кнопка с прямой ссылкой на Mini App, которую Telegram сам разворачивает в приложение.
+
+Такую ссылку выдаёт BotFather:
+
+1. `/newapp` → выбрать бота;
+2. заполнить название, описание, картинку `640x360`;
+3. **Web App URL** — значение `PUBLIC_URL` (например `https://tobacconist.example.com`);
+4. **short name** — короткое имя латиницей, например `order`;
+5. BotFather ответит ссылкой вида `https://t.me/<бот>/<short name>` — её и класть в `TELEGRAM_MINIAPP_LINK`.
+
+Номер заказа уезжает в ссылку как `?startapp=order_<id>` и приходит в мини-апп как `start_param`. Если переменную не задать, сервер при старте напишет предупреждение, а сообщения будут уходить без кнопки — всё остальное продолжит работать.
 
 > В локальной разработке без реального HTTPS-туннеля (ngrok/cloudflared) бот не сможет принимать апдейты через webhook, но REST API и Mini App работают независимо от этого — их можно тестировать без живого бота.
 
@@ -96,6 +111,7 @@ cd mini-app && npx tsc -p tsconfig.json --noEmit
    |---|---|
    | `BOT_TOKEN`, `TELEGRAM_ADMIN_ID`, `TELEGRAM_GROUP_CHAT_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL` | см. таблицу выше |
    | `PUBLIC_URL` | полный HTTPS-адрес, например `https://tobacconist.example.com` |
+   | `TELEGRAM_MINIAPP_LINK` | прямая ссылка на Mini App из BotFather, например `https://t.me/tobacconist_bot/order` |
    | `PUBLIC_HOST` | тот же домен без схемы — используется в Traefik-лейбле для `Host()`-правила |
    | `DB_PATH` | путь к SQLite внутри контейнера, по умолчанию `/app/data/tobacconist.sqlite3` — не менять без необходимости, это путь внутри примонтированного volume |
    | `PORT` | порт, на котором слушает процесс внутри контейнера (по умолчанию `3000`, совпадает с лейблом Traefik) |

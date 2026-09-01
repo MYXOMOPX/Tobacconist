@@ -15,7 +15,10 @@ const admin: AuthedUser = { id: 1, telegramId: '1', displayName: 'Admin', role: 
 const friend: AuthedUser = { id: 2, telegramId: '2', displayName: 'Friend', role: 'member' };
 
 function announcer(): OrderAnnouncer {
-  return { announceOrderOpened: vi.fn().mockResolvedValue(undefined) };
+  return {
+    announceOrderOpened: vi.fn().mockResolvedValue(undefined),
+    announceStatusChanged: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 function testApp(user: AuthedUser, db: ReturnType<typeof createTestDb>, ann = announcer()) {
@@ -75,6 +78,48 @@ describe('orders routes', () => {
     const list = await app.inject({ method: 'GET', url: '/api/orders' });
     expect(list.json()).toHaveLength(2);
     expect(ann.announceOrderOpened).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Telegram refusing the message does not un-create the order. Reporting the
+   * request as failed left the admin looking at an error while the order sat
+   * there, invisible until a manual refresh.
+   */
+  it('opens the order even when the group announcement fails', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const ann = announcer();
+    vi.mocked(ann.announceOrderOpened).mockRejectedValue(
+      new Error('Call to sendMessage failed! (400: BUTTON_TYPE_INVALID)')
+    );
+    const app = testApp(admin, db, ann);
+
+    const res = await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+
+    expect(res.statusCode).toBe(201);
+    expect((await app.inject({ method: 'GET', url: '/api/orders' })).json()).toHaveLength(1);
+  });
+
+  it('announces every status change, and survives that failing too', async () => {
+    const db = createTestDb();
+    const { vendor } = await seedVendorWithStock(db);
+    const ann = announcer();
+    const app = testApp(admin, db, ann);
+    const created = await app.inject({ method: 'POST', url: '/api/orders', payload: { vendorId: vendor.id } });
+    const orderId = created.json().id;
+
+    const closed = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${orderId}/status`,
+      payload: { status: 'awaiting_validation' },
+    });
+    expect(closed.statusCode).toBe(200);
+    expect(ann.announceStatusChanged).toHaveBeenCalledWith('Vasya', orderId, 'awaiting_validation');
+
+    vi.mocked(ann.announceStatusChanged).mockRejectedValue(new Error('telegram is down'));
+    const finished = await app.inject({ method: 'POST', url: `/api/orders/${orderId}/finish`, payload: {} });
+    expect(finished.statusCode).toBe(200);
+    expect((await getOrder(db, orderId))!.status).toBe('done');
   });
 
   it('refuses a second order at the same vendor', async () => {

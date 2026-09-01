@@ -1,5 +1,6 @@
 interface TelegramWebApp {
   initData: string;
+  initDataUnsafe?: { start_param?: string };
   ready(): void;
   expand(): void;
 }
@@ -23,6 +24,21 @@ function devUserName(): string {
   if (!name) throw new Error('Без имени не войти. Обнови страницу и представься.');
   window.localStorage.setItem(DEV_USER_KEY, name);
   return name;
+}
+
+/**
+ * The order the group's "открыть заказ" button pointed at, if any.
+ *
+ * A direct link (`t.me/bot/app?startapp=order_5`) delivers it as `start_param`,
+ * not as a query string — the app's own url never sees it. The `?order=` form
+ * still works for a link opened straight in a browser.
+ */
+export function orderFromLaunch(): number | null {
+  const startParam = getTelegramWebApp()?.initDataUnsafe?.start_param ?? '';
+  const fromStart = /^order_(\d+)$/.exec(startParam)?.[1];
+  const raw = fromStart ?? new URLSearchParams(window.location.search).get('order');
+  const id = Number(raw);
+  return raw && Number.isInteger(id) && id > 0 ? id : null;
 }
 
 /**

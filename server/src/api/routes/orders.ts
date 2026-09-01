@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { runInTransaction, type Db } from '../../db/client.js';
 import { brands, flavors, users, vendors, weights } from '../../db/schema.js';
@@ -47,6 +47,19 @@ async function loadOrder(db: Db, raw: string) {
 }
 
 export function ordersRoutes(db: Db, orderAnnouncer: OrderAnnouncer) {
+  /**
+   * The order is already saved by the time the group is told about it, so a
+   * failed announcement must not be reported as a failed request — that used to
+   * leave the admin staring at an error next to an order that did exist.
+   */
+  async function announce(req: FastifyRequest, send: () => Promise<void>) {
+    try {
+      await send();
+    } catch (err) {
+      req.log.error({ err }, 'order announcement failed');
+    }
+  }
+
   return async function routes(api: FastifyInstance) {
     /** Spec §5: several vendors can be collecting at once, so this is a list. */
     api.get('/', async () => {
@@ -58,7 +71,7 @@ export function ordersRoutes(db: Db, orderAnnouncer: OrderAnnouncer) {
       const order = await createOrder(db, req.body.vendorId, req.authedUser!.id);
       const dto = await toOrderDto(db, order);
       // Spec §5: both order-start entry points announce in the group chat.
-      await orderAnnouncer.announceOrderOpened(dto.vendorName, dto.id);
+      await announce(req, () => orderAnnouncer.announceOrderOpened(dto.vendorName, dto.id));
       reply.code(201).send(dto);
     });
 
@@ -92,7 +105,9 @@ export function ordersRoutes(db: Db, orderAnnouncer: OrderAnnouncer) {
           }
         });
 
-        return toOrderDto(db, (await getOrder(db, order.id))!);
+        const dto = await toOrderDto(db, (await getOrder(db, order.id))!);
+        await announce(req, () => orderAnnouncer.announceStatusChanged(dto.vendorName, dto.id, next));
+        return dto;
       }
     );
 
@@ -133,7 +148,9 @@ export function ordersRoutes(db: Db, orderAnnouncer: OrderAnnouncer) {
         await applyDelivery(db, order.id, req.body?.allocations ?? []);
         await setOrderStatus(db, order.id, 'done');
       });
-      return toOrderDto(db, (await getOrder(db, order.id))!);
+      const dto = await toOrderDto(db, (await getOrder(db, order.id))!);
+      await announce(req, () => orderAnnouncer.announceStatusChanged(dto.vendorName, dto.id, 'done'));
+      return dto;
     });
 
     api.get<{ Params: { orderId: string } }>('/:orderId/assortment', async (req) => {

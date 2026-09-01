@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { authHeaders } from './telegram';
+import { authHeaders, orderFromLaunch } from './telegram';
 
 describe('authHeaders', () => {
   afterEach(() => {
@@ -36,5 +36,36 @@ describe('authHeaders', () => {
   it('refuses to guess when the name is left empty', () => {
     vi.spyOn(window, 'prompt').mockReturnValue(null);
     expect(() => authHeaders()).toThrow(/Без имени/);
+  });
+});
+
+describe('orderFromLaunch', () => {
+  afterEach(() => {
+    delete (window as any).Telegram;
+    window.history.replaceState({}, '', '/');
+  });
+
+  /** A direct link delivers startapp as start_param, never as a query string. */
+  it('reads the order out of the direct link start parameter', () => {
+    (window as any).Telegram = {
+      WebApp: { initData: 'x', initDataUnsafe: { start_param: 'order_42' }, ready() {}, expand() {} },
+    };
+    expect(orderFromLaunch()).toBe(42);
+  });
+
+  it('still accepts ?order= for a page opened straight in a browser', () => {
+    window.history.replaceState({}, '', '/?order=7');
+    expect(orderFromLaunch()).toBe(7);
+  });
+
+  it('ignores a start parameter that is not an order', () => {
+    (window as any).Telegram = {
+      WebApp: { initData: 'x', initDataUnsafe: { start_param: 'nonsense' }, ready() {}, expand() {} },
+    };
+    expect(orderFromLaunch()).toBeNull();
+  });
+
+  it('is null when nothing pointed at an order', () => {
+    expect(orderFromLaunch()).toBeNull();
   });
 });

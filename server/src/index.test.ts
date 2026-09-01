@@ -13,6 +13,7 @@ const config: Config = {
   publicUrl: 'https://example.com',
   devNoTelegram: false,
   devAdminName: '',
+  miniAppLink: 'https://t.me/testbot/order',
   botInfo: {
     id: 123456,
     is_bot: true,
