@@ -36,6 +36,14 @@ describe('createGeminiClient', () => {
     );
   });
 
+  it('says what is missing instead of letting Google answer 403', async () => {
+    const client = createGeminiClient('');
+    await expect(client.generateFromImage(IMAGE)).rejects.toThrow('GEMINI_API_KEY');
+    // Nothing is asked of Google at all — there is nothing to ask with.
+    expect(getGenerativeModel).not.toHaveBeenCalled();
+    expect(generateContent).not.toHaveBeenCalled();
+  });
+
   it('returns the model text', async () => {
     generateContent.mockResolvedValue(ok('{"brand":null}'));
     const client = createGeminiClient('key', DEFAULT_GEMINI_MODEL, async () => {});

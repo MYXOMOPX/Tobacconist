@@ -68,6 +68,9 @@ export async function main() {
     await bot.api.setWebhook(`${config.publicUrl}/telegram/webhook`);
   } else {
     console.log('[dev] DEV_NO_TELEGRAM=true — no bot, no webhook, identity from X-Dev-User');
+    if (!config.geminiApiKey) {
+      console.log('[dev] no GEMINI_API_KEY — everything works except reading price screenshots');
+    }
   }
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }

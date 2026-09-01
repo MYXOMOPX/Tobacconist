@@ -24,6 +24,17 @@ export function createGeminiClient(
   modelName: string = DEFAULT_GEMINI_MODEL,
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))
 ): GeminiClient {
+  // Dev mode makes the key optional, so the server has to boot without one. Sent
+  // anyway, an empty key comes back as Google's "[403] Method doesn't allow
+  // unregistered callers", which says nothing about what to do — say it here.
+  if (!apiKey) {
+    return {
+      async generateFromImage() {
+        throw new Error('no GEMINI_API_KEY is set, so screenshots cannot be recognised');
+      },
+    };
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: modelName,
