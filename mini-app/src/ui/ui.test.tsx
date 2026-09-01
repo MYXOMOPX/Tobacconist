@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -122,5 +124,36 @@ describe('TabBar', () => {
     expect(screen.getByRole('button', { name: 'Заказы' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(screen.getByRole('button', { name: 'История' }));
     expect(onSelect).toHaveBeenCalledWith('history');
+  });
+});
+
+/**
+ * jsdom does not apply the stylesheet, so the only way to guard this is to read
+ * it. Worth the awkwardness: the bottom edge is crowded — two fixed bars and a
+ * sheet — and getting the order wrong has already hidden a sheet's buttons once.
+ */
+describe('bottom-edge stacking', () => {
+  const read = (file: string) => readFileSync(path.join(process.cwd(), 'src/ui', file), 'utf-8');
+  const css = read('ui.css');
+
+  const tokens = read('tokens.css');
+
+  function ruleBody(selector: string) {
+    const start = css.indexOf(`${selector} {`);
+    expect(start, `no rule for ${selector}`).toBeGreaterThan(-1);
+    return css.slice(start, css.indexOf('}', start));
+  }
+
+  function zIndexOf(selector: string) {
+    const declared = ruleBody(selector).match(/z-index:\s*var\(--([\w-]+)\)/);
+    expect(declared, `${selector} declares no z-index`).not.toBeNull();
+    const value = tokens.match(new RegExp(`--${declared![1]}:\\s*(\\d+)`));
+    expect(value, `token --${declared![1]} is not defined`).not.toBeNull();
+    return Number(value![1]);
+  }
+
+  it('puts a sheet above both bottom bars', () => {
+    expect(zIndexOf('.tb-sheet__scrim')).toBeGreaterThan(zIndexOf('.tb-tabbar'));
+    expect(zIndexOf('.tb-sheet__scrim')).toBeGreaterThan(zIndexOf('.tb-sticky'));
   });
 });

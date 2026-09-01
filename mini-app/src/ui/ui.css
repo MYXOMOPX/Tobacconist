@@ -577,6 +577,7 @@
   left: 0;
   right: 0;
   bottom: calc(var(--tb-tabbar-h) + var(--tb-safe-bottom));
+  z-index: var(--tb-z-bar);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -609,6 +610,7 @@
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: var(--tb-z-bar);
   display: flex;
   height: calc(var(--tb-tabbar-h) + var(--tb-safe-bottom));
   background: var(--tb-surface);
@@ -641,6 +643,8 @@
 .tb-sheet__scrim {
   position: fixed;
   inset: 0;
+  /* Above both bottom bars: a sheet is modal, they are not. */
+  z-index: var(--tb-z-sheet);
   background: rgba(0, 0, 0, 0.6);
   border: none;
   padding: 0;

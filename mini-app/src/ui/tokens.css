@@ -150,6 +150,12 @@
   /* Tap-sized button (44px) plus the bar's own 16px padding top and bottom. */
   --tb-sticky-h: 76px;
 
+  /* Stacking order. Without these the bars and a sheet all sit at z-index auto
+     and paint in DOM order — which put the tab bar (rendered last, in App) on
+     top of every sheet and cut off its buttons. */
+  --tb-z-bar: 10;
+  --tb-z-sheet: 20;
+
   /* Telegram draws its own header; the app owns the area below it. */
   --tb-safe-bottom: env(safe-area-inset-bottom, 0px);
 
