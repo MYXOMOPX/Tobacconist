@@ -37,11 +37,14 @@ export function AdminOrderPage({
   orderId,
   onBack,
   onLeaveManagement,
+  backLabel = 'Все заказы',
 }: {
   orderId: number;
   onBack: () => void;
   /** Back to ordering as a participant: the admin buys tobacco too. */
   onLeaveManagement?: () => void;
+  /** Where back goes — the same screen is reached from the history too. */
+  backLabel?: string;
 }) {
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
@@ -231,7 +234,7 @@ export function AdminOrderPage({
         <div className="tb-row__label">
           <h1 className="tb-title">{order.vendorName}</h1>
           <button type="button" className="tb-btn tb-btn--ghost" onClick={onBack}>
-            ← Все заказы
+            ← {backLabel}
           </button>
         </div>
         <StatusBadge status={order.status} />

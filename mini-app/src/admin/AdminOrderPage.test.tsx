@@ -203,4 +203,23 @@ describe('AdminOrderPage — finished', () => {
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
     expect(await screen.findByText(/CyberKiwi - 250g - x3/)).toBeInTheDocument();
   });
+
+  /** Money keeps moving after the order is closed — that is the point of §10. */
+  it('still marks who paid', async () => {
+    mockApi('done');
+    const user = userEvent.setup();
+    render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: /Friend/ }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/orders/5/payments/2', { paid: true })
+    );
+  });
+
+  it('names where back goes, since this screen is reached from the history too', async () => {
+    mockApi('done');
+    render(<AdminOrderPage orderId={5} onBack={vi.fn()} backLabel="История" />);
+    expect(await screen.findByRole('button', { name: '← История' })).toBeInTheDocument();
+  });
 });

@@ -1,5 +1,13 @@
 {
   "extends": "../tsconfig.base.json",
   "include": ["src"],
-  "compilerOptions": { "jsx": "react-jsx", "lib": ["ES2022", "DOM"], "types": ["vitest/globals"], "noEmit": true }
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    // vite/client is what declares `*.css`, which ui/index.ts imports for their
+    // side effects. It used to arrive only transitively through vitest's types,
+    // and tsc intermittently failed with TS2882 when it did not.
+    "types": ["vitest/globals", "vite/client"],
+    "noEmit": true
+  }
 }

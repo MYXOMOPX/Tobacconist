@@ -67,6 +67,33 @@ describe('HistoryPage', () => {
     expect(detail).toHaveTextContent('Не оплачено');
   });
 
+  it('lets the admin step into managing a closed order', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path === '/history'
+        ? [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' }]
+        : []
+    );
+    const onManage = vi.fn();
+
+    const user = userEvent.setup();
+    render(<HistoryPage isAdmin onManage={onManage} />);
+    await user.click(await screen.findByRole('button', { name: 'Управление' }));
+
+    expect(onManage).toHaveBeenCalledWith(7);
+  });
+
+  it('offers no management to a participant', async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path === '/history'
+        ? [{ id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' }]
+        : []
+    );
+
+    render(<HistoryPage />);
+    expect(await screen.findByRole('button', { name: /Vasya/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Управление' })).not.toBeInTheDocument();
+  });
+
   it('invites the user to act when there is nothing in the history yet', async () => {
     vi.mocked(api.get).mockResolvedValue([]);
     render(<HistoryPage />);

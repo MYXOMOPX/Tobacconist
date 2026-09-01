@@ -46,6 +46,11 @@ export function App() {
   const [managing, setManaging] = useState(false);
   /** Picking tobacco and reviewing the composed order are separate screens now. */
   const [viewingMyOrder, setViewingMyOrder] = useState(false);
+  /**
+   * A closed order opened from the history. It cannot be reopened, but the admin
+   * still reads it and still marks who paid (spec §10).
+   */
+  const [managingClosedId, setManagingClosedId] = useState<number | null>(null);
 
   function loadMe() {
     setError(null);
@@ -125,7 +130,16 @@ export function App() {
           <VendorPage vendorId={openVendorId} onBack={() => setOpenVendorId(null)} />
         ))}
 
-      {active === 'history' && <HistoryPage />}
+      {active === 'history' &&
+        (managingClosedId !== null && isAdmin ? (
+          <AdminOrderPage
+            orderId={managingClosedId}
+            onBack={() => setManagingClosedId(null)}
+            backLabel="История"
+          />
+        ) : (
+          <HistoryPage isAdmin={isAdmin} onManage={setManagingClosedId} />
+        ))}
 
       <TabBar
         items={isAdmin ? ADMIN_TABS : MEMBER_TABS}
@@ -135,6 +149,7 @@ export function App() {
           setOpenVendorId(null);
           setManaging(false);
           setViewingMyOrder(false);
+          setManagingClosedId(null);
           setTab(id);
         }}
       />

@@ -5,6 +5,7 @@ import type { AggregateLine, OrderDto } from '../types';
 import {
   Badge,
   Banner,
+  Button,
   Card,
   CardHead,
   EmptyState,
@@ -25,7 +26,18 @@ type OrderDetail = {
   paid: boolean;
 };
 
-export function HistoryPage() {
+/**
+ * Spec §10: closed orders stay whole and read-only. The admin still steps into
+ * one — a delivery gets paid for after it is over, and the payment marks are the
+ * one thing that keeps moving in a finished order.
+ */
+export function HistoryPage({
+  isAdmin = false,
+  onManage,
+}: {
+  isAdmin?: boolean;
+  onManage?: (orderId: number) => void;
+} = {}) {
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [selected, setSelected] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,13 +70,19 @@ export function HistoryPage() {
       ) : (
         <div className="tb-stack">
           {orders.map((order) => (
-            <Row
-              key={order.id}
-              label={order.vendorName}
-              note={new Date(order.statusChangedAt).toLocaleDateString('ru-RU')}
-              trailing={<StatusBadge status={order.status} />}
-              onClick={() => openOrder(order.id)}
-            />
+            <Card key={order.id}>
+              <Row
+                label={order.vendorName}
+                note={new Date(order.statusChangedAt).toLocaleDateString('ru-RU')}
+                trailing={<StatusBadge status={order.status} />}
+                onClick={() => openOrder(order.id)}
+              />
+              {isAdmin && onManage && (
+                <Button block onClick={() => onManage(order.id)}>
+                  Управление
+                </Button>
+              )}
+            </Card>
           ))}
         </div>
       )}
