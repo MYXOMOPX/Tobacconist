@@ -186,7 +186,7 @@ describe('AvailabilityReview', () => {
     await user.upload(screen.getByLabelText('Скрины наличия'), shot('darkside.jpg'));
     await user.click(await screen.findByRole('button', { name: /Убрать всё другое наличие/ }));
 
-    expect(screen.getByText(/станет недоступным у Darian Shisha/)).toBeInTheDocument();
+    expect(screen.getByText(/будет удалено у Darian Shisha/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Сохранить наличие' }));
     await waitFor(() =>

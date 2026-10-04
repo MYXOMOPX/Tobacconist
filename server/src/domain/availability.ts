@@ -1,6 +1,14 @@
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { vendorFlavorAvailability, flavors, brands, weights } from '../db/schema.js';
+import {
+  vendorFlavorAvailability,
+  flavors,
+  brands,
+  weights,
+  orders,
+  orderItems,
+  deliveryChecklistItems,
+} from '../db/schema.js';
 import { findOrCreateFlavor } from './catalog.js';
 
 export async function replaceAvailability(
@@ -37,7 +45,10 @@ export async function replaceAvailability(
   }
 
   const seenFlavorIds = new Set<number>();
-  const resultMap = new Map<number, { flavorId: number; flavorName: string; available: boolean }>();
+  const resultMap = new Map<
+    number,
+    { flavorId: number; flavorName: string; available: boolean; listed: boolean }
+  >();
 
   for (const entry of entries) {
     const flavor = await findOrCreateFlavor(db, brandId, entry.name, { exactOnly: params.strictNames });
@@ -72,7 +83,12 @@ export async function replaceAvailability(
       }
     }
     // Only add to result if not already seen in this upload (deduplicate)
-    resultMap.set(flavor.id, { flavorId: flavor.id, flavorName: entry.name, available: entry.available });
+    resultMap.set(flavor.id, {
+      flavorId: flavor.id,
+      flavorName: entry.name,
+      available: entry.available,
+      listed: true,
+    });
   }
 
   for (const row of existingForTriple) {
@@ -83,7 +99,7 @@ export async function replaceAvailability(
         .set({ available: false, updatedAt: now })
         .where(eq(vendorFlavorAvailability.id, row.vendor_flavor_availability.id))
         .run();
-      resultMap.set(fid, { flavorId: fid, flavorName: row.flavors.name, available: false });
+      resultMap.set(fid, { flavorId: fid, flavorName: row.flavors.name, available: false, listed: false });
     }
   }
 
@@ -181,27 +197,58 @@ export async function applyAvailabilityBatch(
   }
 
   if (params.wipeOthers) {
-    const touched = new Set(groups.map((group) => `${group.brandId}:${group.weightId}`));
+    // What the batch listed — struck through or not — stays. Everything else the
+    // vendor had is erased, except what an order of theirs still refers to: that
+    // is only flagged as no longer stocked (§12), so the order does not break.
+    const listed = new Set<string>();
+    for (const group of applied) {
+      for (const line of group.lines) {
+        if (line.listed) listed.add(`${line.flavorId}:${group.weightId}`);
+      }
+    }
+
+    const inOrders = new Set<string>();
+    const orderRows = [
+      ...(await db
+        .select({ flavorId: orderItems.flavorId, weightId: orderItems.weightId })
+        .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(eq(orders.vendorId, vendorId))
+        .all()),
+      ...(await db
+        .select({ flavorId: deliveryChecklistItems.flavorId, weightId: deliveryChecklistItems.weightId })
+        .from(deliveryChecklistItems)
+        .innerJoin(orders, eq(orders.id, deliveryChecklistItems.orderId))
+        .where(eq(orders.vendorId, vendorId))
+        .all()),
+    ];
+    for (const row of orderRows) inOrders.add(`${row.flavorId}:${row.weightId}`);
+
     const now = new Date().toISOString();
     const rows = await db
       .select({
         id: vendorFlavorAvailability.id,
+        flavorId: vendorFlavorAvailability.flavorId,
         weightId: vendorFlavorAvailability.weightId,
-        brandId: flavors.brandId,
         available: vendorFlavorAvailability.available,
       })
       .from(vendorFlavorAvailability)
-      .innerJoin(flavors, eq(flavors.id, vendorFlavorAvailability.flavorId))
       .where(eq(vendorFlavorAvailability.vendorId, vendorId))
       .all();
 
     for (const row of rows) {
-      if (touched.has(`${row.brandId}:${row.weightId}`) || !row.available) continue;
-      await db
-        .update(vendorFlavorAvailability)
-        .set({ available: false, updatedAt: now })
-        .where(eq(vendorFlavorAvailability.id, row.id))
-        .run();
+      const key = `${row.flavorId}:${row.weightId}`;
+      if (listed.has(key)) continue;
+      if (inOrders.has(key)) {
+        if (!row.available) continue;
+        await db
+          .update(vendorFlavorAvailability)
+          .set({ available: false, updatedAt: now })
+          .where(eq(vendorFlavorAvailability.id, row.id))
+          .run();
+      } else {
+        await db.delete(vendorFlavorAvailability).where(eq(vendorFlavorAvailability.id, row.id)).run();
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
+import { users, orders, orderItems } from '../db/schema';
 import { createVendor } from './vendors';
 import { createBrand, getWeights } from './catalog';
 import { replaceAvailability, isAvailable, listVendorAssortment, applyAvailabilityBatch } from './availability';
@@ -229,7 +230,7 @@ describe('applyAvailabilityBatch', () => {
     expect(stock.map((row) => row.flavorName)).toEqual(['Needls']);
   });
 
-  it('wipeOthers keeps the rows, so an ordered position is flagged and not erased', async () => {
+  it('wipeOthers erases rows nobody ordered, and keeps struck-through ones the batch listed', async () => {
     const { db, vendor, dark, must, w250 } = await vendorWithTwoBrands();
     await replaceAvailability(db, {
       vendorId: vendor.id,
@@ -240,13 +241,74 @@ describe('applyAvailabilityBatch', () => {
 
     await applyAvailabilityBatch(db, {
       vendorId: vendor.id,
+      groups: [
+        {
+          brandId: dark.id,
+          weightId: w250.id,
+          entries: [
+            { name: 'Needls', available: true },
+            { name: 'Sold Out', available: false },
+          ],
+        },
+      ],
+      wipeOthers: true,
+    });
+
+    const all = await listVendorAssortment(db, vendor.id);
+    expect(all.map((row) => [row.flavorName, row.available]).sort()).toEqual([
+      ['Needls', true],
+      ['Sold Out', false],
+    ]);
+  });
+
+  it('wipeOthers only flags a position an order of this vendor still refers to', async () => {
+    const { db, vendor, dark, must, w250 } = await vendorWithTwoBrands();
+    const [{ flavorId }] = await replaceAvailability(db, {
+      vendorId: vendor.id,
+      brandId: must.id,
+      weightId: w250.id,
+      entries: [{ name: 'Kiwi Smoothie', available: true }],
+    });
+    const now = new Date().toISOString();
+    const [user] = await db
+      .insert(users)
+      .values({ telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: now })
+      .returning()
+      .all();
+    const [order] = await db
+      .insert(orders)
+      .values({
+        vendorId: vendor.id,
+        status: 'ordering',
+        createdAt: now,
+        statusChangedAt: now,
+        createdByUserId: user.id,
+      })
+      .returning()
+      .all();
+    await db
+      .insert(orderItems)
+      .values({
+        orderId: order.id,
+        userId: user.id,
+        brandId: must.id,
+        flavorId,
+        weightId: w250.id,
+        quantity: 1,
+        addedByUserId: user.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    await applyAvailabilityBatch(db, {
+      vendorId: vendor.id,
       groups: [{ brandId: dark.id, weightId: w250.id, entries: [{ name: 'Needls', available: true }] }],
       wipeOthers: true,
     });
 
     const all = await listVendorAssortment(db, vendor.id);
-    const dropped = all.find((row) => row.flavorName === 'Kiwi Smoothie');
-    expect(dropped).toMatchObject({ available: false });
+    expect(all.find((row) => row.flavorName === 'Kiwi Smoothie')).toMatchObject({ available: false });
   });
 
   it('does not touch another vendor stock', async () => {
