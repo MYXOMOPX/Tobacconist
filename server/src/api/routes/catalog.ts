@@ -11,9 +11,12 @@ import {
   setVendorBrandPrice,
   getVendorBrandPrices,
 } from '../../domain/vendors.js';
+import type { GeminiClient } from '../../gemini/client.js';
+import { reviewDuplicates } from '../../gemini/duplicateReview.js';
+import { mergeFlavors } from '../../domain/flavorMerge.js';
 import { listVendorAssortment, setFlavorAvailability } from '../../domain/availability.js';
 
-export function catalogRoutes(db: Db) {
+export function catalogRoutes(db: Db, geminiClient?: GeminiClient) {
   return async function routes(api: FastifyInstance) {
     api.addHook('preHandler', requireAdmin);
 
@@ -42,6 +45,33 @@ export function catalogRoutes(db: Db) {
         return importFlavorList(db, Number(req.params.brandId), req.body.text);
       }
     );
+
+    /** What cleaning up this brand's duplicates and typos would merge. Changes nothing. */
+    api.post<{ Params: { brandId: string } }>('/brands/:brandId/flavors/duplicates', async (req, reply) => {
+      const brand = (await listBrands(db)).find((b) => b.id === Number(req.params.brandId));
+      if (!brand) {
+        reply.code(404).send({ error: 'brand not found' });
+        return;
+      }
+      return reviewDuplicates(db, geminiClient ?? { generateFromImage: async () => '' }, brand);
+    });
+
+    /** Applies the merges the admin confirmed from the preview. */
+    api.post<{
+      Params: { brandId: string };
+      Body: { merges: { keepId: number; dropIds: number[] }[] };
+    }>('/brands/:brandId/flavors/merge', async (req, reply) => {
+      const merges = req.body?.merges;
+      if (!Array.isArray(merges) || merges.length === 0) {
+        reply.code(400).send({ error: 'merges are required' });
+        return;
+      }
+      try {
+        return await mergeFlavors(db, Number(req.params.brandId), merges);
+      } catch (err) {
+        reply.code(400).send({ error: err instanceof Error ? err.message : 'merge failed' });
+      }
+    });
 
     api.get<{ Querystring: { includeArchived?: string } }>('/vendors', async (req) => {
       return listVendors(db, { includeArchived: req.query.includeArchived === 'true' });

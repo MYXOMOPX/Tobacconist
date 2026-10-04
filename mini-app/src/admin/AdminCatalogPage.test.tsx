@@ -68,4 +68,30 @@ describe('AdminCatalogPage', () => {
     expect(api.post).toHaveBeenCalledWith('/admin/brands/1/flavors/import', { text: ['Cola', 'Apple'].join('\n') });
     expect(await screen.findByText('Добавлено: 2')).toBeInTheDocument();
   });
+
+  it('previews duplicates and merges only what stays ticked', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockImplementation(async (path: string) => {
+      if (path.endsWith('/duplicates')) {
+        return {
+          judgedByAi: true,
+          groups: [
+            { keep: { id: 1, name: 'FRUITALITY' }, duplicates: [{ id: 2, name: 'FRUITTALLLITY' }] },
+            { keep: { id: 3, name: 'MINT' }, duplicates: [{ id: 4, name: 'MIST' }] },
+          ],
+        };
+      }
+      return { merged: 1 };
+    });
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /DarkSide/ }));
+    await user.click(await screen.findByRole('button', { name: 'Найти дубли и опечатки' }));
+
+    await user.click(await screen.findByRole('button', { name: /MIST → MINT/ }));
+    await user.click(screen.getByRole('button', { name: 'Слить выбранное' }));
+
+    expect(api.post).toHaveBeenCalledWith('/admin/brands/1/flavors/merge', {
+      merges: [{ keepId: 1, dropIds: [2] }],
+    });
+  });
 });

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
-import type { Brand, Flavor, FlavorImportResult, Vendor } from '../types';
-import { Banner, Button, Card, CardHead, EmptyState, ListSkeleton, Row, TextField } from '../ui';
+import type { Brand, DuplicateGroup, DuplicateReview, Flavor, FlavorImportResult, Vendor } from '../types';
+import { Banner, Button, Card, CardHead, EmptyState, ListSkeleton, Row, TextField, Toggle } from '../ui';
 
 /**
  * One brand's reference flavour list. Pasted one per line; screenshots are
@@ -12,6 +12,9 @@ function BrandFlavors({ brand }: { brand: Brand }) {
   const [flavors, setFlavors] = useState<Flavor[]>([]);
   const [text, setText] = useState('');
   const [report, setReport] = useState<string | null>(null);
+  /** The merge preview; `chosen` holds the keep ids of the groups still ticked. */
+  const [review, setReview] = useState<DuplicateGroup[] | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
   const { error, run } = useAction();
 
   const reload = async () => setFlavors(await api.get<Flavor[]>(`/admin/brands/${brand.id}/flavors`));
@@ -34,6 +37,33 @@ function BrandFlavors({ brand }: { brand: Brand }) {
     });
   }
 
+  function findDuplicates() {
+    return run(async () => {
+      const result = await api.post<DuplicateReview>(`/admin/brands/${brand.id}/flavors/duplicates`);
+      setReview(result.groups);
+      setChosen(new Set(result.groups.map((group) => group.keep.id)));
+    });
+  }
+
+  function toggleGroup(keepId: number) {
+    const next = new Set(chosen);
+    if (!next.delete(keepId)) next.add(keepId);
+    setChosen(next);
+  }
+
+  function applyMerges() {
+    const merges = (review ?? [])
+      .filter((group) => chosen.has(group.keep.id))
+      .map((group) => ({ keepId: group.keep.id, dropIds: group.duplicates.map((d) => d.id) }));
+    if (merges.length === 0) return;
+    return run(async () => {
+      await api.post(`/admin/brands/${brand.id}/flavors/merge`, { merges });
+      setReview(null);
+      setReport(`Слито вкусов: ${merges.reduce((n, m) => n + m.dropIds.length, 0)}`);
+      await reload();
+    });
+  }
+
   return (
     <div className="tb-stack">
       {error && <Banner tone="danger">{error}</Banner>}
@@ -51,6 +81,25 @@ function BrandFlavors({ brand }: { brand: Brand }) {
       />
       {report && <Banner tone="info">{report}</Banner>}
       <Button onClick={save}>Загрузить список</Button>
+
+      <Button onClick={findDuplicates}>Найти дубли и опечатки</Button>
+      {review && review.length === 0 && <Banner tone="info">Дублей и опечаток не нашлось.</Banner>}
+      {review && review.length > 0 && (
+        <>
+          <p className="tb-subtitle">Что будет слито — сними галочку с лишнего:</p>
+          {review.map((group) => (
+            <Toggle
+              key={group.keep.id}
+              label={`${group.duplicates.map((d) => d.name).join(', ')} → ${group.keep.name}`}
+              pressed={chosen.has(group.keep.id)}
+              onChange={() => toggleGroup(group.keep.id)}
+            />
+          ))}
+          <Button variant="primary" onClick={applyMerges}>
+            Слить выбранное
+          </Button>
+        </>
+      )}
     </div>
   );
 }

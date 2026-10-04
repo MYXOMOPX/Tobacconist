@@ -98,3 +98,10 @@ export type SnapshotDto = {
 export type Flavor = { id: number; brandId: number; name: string };
 
 export type FlavorImportResult = { added: string[]; skipped: string[] };
+
+export type DuplicateGroup = {
+  keep: { id: number; name: string };
+  duplicates: { id: number; name: string }[];
+};
+
+export type DuplicateReview = { groups: DuplicateGroup[]; judgedByAi: boolean };
