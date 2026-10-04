@@ -111,20 +111,20 @@
   align-items: baseline;
   gap: var(--tb-space-sm);
   min-height: 28px;
+  flex-wrap: wrap;
 }
 
+/* The label's children join the row directly: the name takes a full line of
+   its own (so it is always readable), the figures sit on the line below. */
 .tb-ledger__label {
-  display: flex;
-  align-items: baseline;
-  gap: var(--tb-space-sm);
-  /* Shrinks so a long flavour name ellipsises instead of pushing the figures
-     off the screen — the numbers on the right always stay readable. */
-  flex: 0 1 auto;
-  min-width: 0;
+  display: contents;
 }
 
 .tb-ledger__name {
   font-size: var(--tb-size-body);
+  flex: 1 1 100%;
+  min-width: 0;
+  /* Long names ellipsise instead of overflowing past the right edge. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
