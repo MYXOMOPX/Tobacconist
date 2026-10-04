@@ -80,9 +80,9 @@ export function ChecklistPage({
                 {item.brandName} {item.flavorName}
               </span>
               <span className="tb-ledger__meta">{gramsLabel(item.grams)}</span>
+              <span className="tb-ledger__note">нужно {item.expectedQty}</span>
             </span>
             <span className="tb-ledger__rail" aria-hidden="true" />
-            <span className="tb-ledger__note">нужно {item.expectedQty}</span>
             <Stepper
               value={item.receivedQty}
               max={999}
