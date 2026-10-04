@@ -55,4 +55,17 @@ describe('AdminCatalogPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('vendor name already used');
   });
+
+  it('loads a flavour list for a brand, one per line', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValue({ added: ['Cola', 'Apple'], skipped: [] });
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /DarkSide/ }));
+
+    await user.type(await screen.findByLabelText('Список вкусов DarkSide'), 'Cola{Enter}Apple');
+    await user.click(screen.getByRole('button', { name: 'Загрузить список' }));
+
+    expect(api.post).toHaveBeenCalledWith('/admin/brands/1/flavors/import', { text: ['Cola', 'Apple'].join('\n') });
+    expect(await screen.findByText('Добавлено: 2')).toBeInTheDocument();
+  });
 });

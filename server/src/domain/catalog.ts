@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { weights, brands, flavors } from '../db/schema.js';
+import { matchFlavor } from './flavorMatch.js';
 
 export function packPriceEur(pricePerKgEur: number, grams: number): number {
   return Math.round(pricePerKgEur * (grams / 1000) * 100) / 100;
@@ -19,15 +20,43 @@ export async function listBrands(db: Db) {
   return db.select().from(brands).all();
 }
 
+/**
+ * Returns the brand's flavour with this name, creating it only when nothing
+ * close exists. "Close" is judged by `matchFlavor`: the same name in another
+ * case or alphabet, or one typo away, is the flavour we already have — never a
+ * second row for it.
+ */
 export async function findOrCreateFlavor(db: Db, brandId: number, name: string) {
-  const existing = await db
-    .select()
-    .from(flavors)
-    .where(and(eq(flavors.brandId, brandId), eq(flavors.name, name)))
-    .get();
-  if (existing) return existing;
-  const [row] = await db.insert(flavors).values({ brandId, name }).returning().all();
+  const trimmed = name.trim();
+  const known = await listFlavorsByBrand(db, brandId);
+  const match = matchFlavor(trimmed, known.map((flavor) => flavor.name));
+  if (match.kind === 'exact' || match.kind === 'near') {
+    const found = known.find((flavor) => flavor.name === match.name);
+    if (found) return found;
+  }
+  const [row] = await db.insert(flavors).values({ brandId, name: trimmed }).returning().all();
   return row;
+}
+
+/**
+ * Loads a brand's flavour list, one name per line. The list is the reference
+ * spelling the parser later snaps screenshots to, so it only ever adds: a name
+ * that matches an existing flavour is reported as skipped, not duplicated.
+ */
+export async function importFlavorList(db: Db, brandId: number, text: string) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const added: string[] = [];
+  const skipped: string[] = [];
+  for (const line of lines) {
+    const before = (await listFlavorsByBrand(db, brandId)).length;
+    await findOrCreateFlavor(db, brandId, line);
+    const after = (await listFlavorsByBrand(db, brandId)).length;
+    (after > before ? added : skipped).push(line);
+  }
+  return { added, skipped };
 }
 
 export async function listFlavorsByBrand(db: Db, brandId: number) {

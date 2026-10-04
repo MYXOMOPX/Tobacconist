@@ -1,8 +1,59 @@
 import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
-import type { Brand, Vendor } from '../types';
+import type { Brand, Flavor, FlavorImportResult, Vendor } from '../types';
 import { Banner, Button, Card, CardHead, EmptyState, ListSkeleton, Row, TextField } from '../ui';
+
+/**
+ * One brand's reference flavour list. Pasted one per line; screenshots are
+ * later snapped to these spellings, so a typo on a photo lands on the real name.
+ */
+function BrandFlavors({ brand }: { brand: Brand }) {
+  const [flavors, setFlavors] = useState<Flavor[]>([]);
+  const [text, setText] = useState('');
+  const [report, setReport] = useState<string | null>(null);
+  const { error, run } = useAction();
+
+  const reload = async () => setFlavors(await api.get<Flavor[]>(`/admin/brands/${brand.id}/flavors`));
+
+  useEffect(() => {
+    run(reload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brand.id]);
+
+  function save() {
+    if (!text.trim()) return;
+    return run(async () => {
+      const result = await api.post<FlavorImportResult>(`/admin/brands/${brand.id}/flavors/import`, { text });
+      setText('');
+      setReport(
+        `Добавлено: ${result.added.length}` +
+          (result.skipped.length ? `, уже были: ${result.skipped.length}` : '')
+      );
+      await reload();
+    });
+  }
+
+  return (
+    <div className="tb-stack">
+      {error && <Banner tone="danger">{error}</Banner>}
+      <p className="tb-subtitle">
+        {flavors.length === 0
+          ? 'Список вкусов пуст.'
+          : `Вкусов в списке: ${flavors.length}. ${flavors.map((flavor) => flavor.name).join(', ')}`}
+      </p>
+      <TextField
+        label={`Список вкусов ${brand.name}`}
+        value={text}
+        onChange={setText}
+        placeholder="По одному вкусу на строку"
+        rows={6}
+      />
+      {report && <Banner tone="info">{report}</Banner>}
+      <Button onClick={save}>Загрузить список</Button>
+    </div>
+  );
+}
 
 /**
  * The list of vendors and the brand catalogue. Everything about one vendor —
@@ -13,6 +64,7 @@ export function AdminCatalogPage({ onOpenVendor }: { onOpenVendor: (vendorId: nu
   const [brands, setBrands] = useState<Brand[]>([]);
   const [newVendorName, setNewVendorName] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
+  const [openBrandId, setOpenBrandId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
 
@@ -87,11 +139,14 @@ export function AdminCatalogPage({ onOpenVendor }: { onOpenVendor: (vendorId: nu
         <p className="tb-subtitle">Общий справочник: бренды одни и те же у всех барыг.</p>
         <div className="tb-stack">
           {brands.map((brand) => (
-            <div className="tb-ledger" key={brand.id}>
-              <span className="tb-ledger__label">
-                <span className="tb-ledger__name">{brand.name}</span>
-              </span>
-              <span className="tb-ledger__rail" aria-hidden="true" />
+            <div key={brand.id}>
+              <Row
+                label={brand.name}
+                note="список вкусов"
+                trailing={<span aria-hidden="true">{openBrandId === brand.id ? '⌃' : '›'}</span>}
+                onClick={() => setOpenBrandId(openBrandId === brand.id ? null : brand.id)}
+              />
+              {openBrandId === brand.id && <BrandFlavors brand={brand} />}
             </div>
           ))}
         </div>

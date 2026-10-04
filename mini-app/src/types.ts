@@ -94,3 +94,7 @@ export type SnapshotDto = {
   text: string;
   table: { brand: string; flavor: string; weight: string; quantity: number; totalEur: number }[];
 };
+
+export type Flavor = { id: number; brandId: number; name: string };
+
+export type FlavorImportResult = { added: string[]; skipped: string[] };

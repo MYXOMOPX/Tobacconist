@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
-import { packPriceEur, getWeights, createBrand, listBrands, findOrCreateFlavor, listFlavorsByBrand, matchBrandByName, findOrCreateBrand } from './catalog';
+import { packPriceEur, getWeights, createBrand, listBrands, findOrCreateFlavor, listFlavorsByBrand, matchBrandByName, findOrCreateBrand, importFlavorList } from './catalog';
 
 describe('packPriceEur', () => {
   it('computes pack price from €/kg and grams', () => {
@@ -70,5 +70,24 @@ describe('findOrCreateBrand', () => {
     const first = await findOrCreateBrand(db, 'DarkSide');
     const second = await findOrCreateBrand(db, ' DarkSide ');
     expect(second.id).toBe(first.id);
+  });
+});
+
+describe('flavour matching in the catalogue', () => {
+  it('does not create a second row for a respelled or mistyped flavour', async () => {
+    const db = createTestDb();
+    const brand = await createBrand(db, 'Test');
+    const first = await findOrCreateFlavor(db, brand.id, 'FRUITALITY');
+    expect((await findOrCreateFlavor(db, brand.id, 'fruitality ')).id).toBe(first.id);
+    expect((await findOrCreateFlavor(db, brand.id, 'FRUITALITLY')).id).toBe(first.id);
+    expect(await listFlavorsByBrand(db, brand.id)).toHaveLength(1);
+  });
+
+  it('imports a list, skipping what is already known', async () => {
+    const db = createTestDb();
+    const brand = await createBrand(db, 'Test');
+    await findOrCreateFlavor(db, brand.id, 'MINT');
+    const result = await importFlavorList(db, brand.id, 'MINT\nCherry Rocks\r\n\n cherry rocks');
+    expect(result).toEqual({ added: ['Cherry Rocks'], skipped: ['MINT', 'cherry rocks'] });
   });
 });

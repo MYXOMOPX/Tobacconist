@@ -160,6 +160,7 @@ export function TextField({
   placeholder,
   numeric = false,
   inputMode,
+  rows,
 }: {
   label: string;
   value: string;
@@ -167,6 +168,8 @@ export function TextField({
   placeholder?: string;
   numeric?: boolean;
   inputMode?: 'text' | 'decimal' | 'numeric';
+  /** More than one line: renders a textarea of this height instead of an input. */
+  rows?: number;
 }) {
   const id = useId();
   return (
@@ -174,14 +177,25 @@ export function TextField({
       <label className="tb-field__label" htmlFor={id}>
         {label}
       </label>
-      <input
-        id={id}
-        className={cx('tb-input', numeric && 'tb-input--num')}
-        value={value}
-        placeholder={placeholder}
-        inputMode={inputMode ?? (numeric ? 'decimal' : 'text')}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      {rows ? (
+        <textarea
+          id={id}
+          className="tb-input tb-input--multiline"
+          rows={rows}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <input
+          id={id}
+          className={cx('tb-input', numeric && 'tb-input--num')}
+          value={value}
+          placeholder={placeholder}
+          inputMode={inputMode ?? (numeric ? 'decimal' : 'text')}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
     </span>
   );
 }

@@ -479,6 +479,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.tb-input--multiline {
+  resize: vertical;
+  line-height: 1.4;
+}
+
 .tb-fieldrow {
   display: flex;
   gap: var(--tb-space-sm);

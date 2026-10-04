@@ -36,6 +36,25 @@ describe('catalog routes', () => {
     expect(list.json()).toEqual([{ id: 1, name: 'DarkSide' }]);
   });
 
+  it('imports a flavour list one per line and lists it sorted', async () => {
+    const { app } = testApp(admin);
+    const brand = (await app.inject({ method: 'POST', url: '/api/admin/brands', payload: { name: 'DarkSide' } })).json();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/brands/${brand.id}/flavors/import`,
+      payload: { text: ['Cola', 'Apple', 'cola'].join('\n') },
+    });
+    expect(res.json()).toEqual({ added: ['Cola', 'Apple'], skipped: ['cola'] });
+    const list = await app.inject({ method: 'GET', url: `/api/admin/brands/${brand.id}/flavors` });
+    expect(list.json().map((f: any) => f.name)).toEqual(['Apple', 'Cola']);
+    const empty = await app.inject({
+      method: 'POST',
+      url: `/api/admin/brands/${brand.id}/flavors/import`,
+      payload: { text: '  ' },
+    });
+    expect(empty.statusCode).toBe(400);
+  });
+
   it('vendor + price flow: create vendor, set price, read it back', async () => {
     const { app } = testApp(admin);
     const vendorRes = await app.inject({ method: 'POST', url: '/api/admin/vendors', payload: { name: 'Vasya' } });

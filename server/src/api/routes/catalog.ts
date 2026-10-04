@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
 import { requireAdmin } from '../middleware/authenticate.js';
-import { getWeights, createBrand, listBrands } from '../../domain/catalog.js';
+import { getWeights, createBrand, listBrands, listFlavorsByBrand, importFlavorList } from '../../domain/catalog.js';
 import {
   createVendor,
   listVendors,
@@ -25,6 +25,23 @@ export function catalogRoutes(db: Db) {
       const brand = await createBrand(db, req.body.name);
       reply.code(201).send(brand);
     });
+
+    api.get<{ Params: { brandId: string } }>('/brands/:brandId/flavors', async (req) => {
+      const list = await listFlavorsByBrand(db, Number(req.params.brandId));
+      return list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    });
+
+    /** One flavour per line; adds what is new, reports what was already there. */
+    api.post<{ Params: { brandId: string }; Body: { text: string } }>(
+      '/brands/:brandId/flavors/import',
+      async (req, reply) => {
+        if (typeof req.body?.text !== 'string' || !req.body.text.trim()) {
+          reply.code(400).send({ error: 'text with one flavour per line is required' });
+          return;
+        }
+        return importFlavorList(db, Number(req.params.brandId), req.body.text);
+      }
+    );
 
     api.get<{ Querystring: { includeArchived?: string } }>('/vendors', async (req) => {
       return listVendors(db, { includeArchived: req.query.includeArchived === 'true' });
