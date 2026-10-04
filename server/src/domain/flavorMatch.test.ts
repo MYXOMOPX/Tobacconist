@@ -50,7 +50,7 @@ describe('matchFlavor', () => {
 describe('resolveEntries', () => {
   it('snaps to a known spelling and remembers the original', () => {
     expect(resolveEntries([{ name: 'FRUITTALLLITY', available: true }], ['FRUITALITY'])).toEqual([
-      { name: 'FRUITALITY', available: true, originalName: 'FRUITTALLLITY' },
+      { name: 'FRUITALITY', available: true, originalName: 'FRUITTALLLITY', checkWith: ['FRUITALITY'] },
     ]);
   });
   it('merges typos inside one batch, first spelling wins', () => {

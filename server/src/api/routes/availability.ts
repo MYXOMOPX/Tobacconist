@@ -6,7 +6,9 @@ import type { Db } from '../../db/client.js';
 import { availabilityUploads, weights } from '../../db/schema.js';
 import { requireAdmin } from '../middleware/authenticate.js';
 import { applyAvailabilityBatch, type AvailabilityGroup } from '../../domain/availability.js';
-import { matchBrandByName } from '../../domain/catalog.js';
+import { matchBrandByName, listFlavorsByBrand } from '../../domain/catalog.js';
+import { resolveEntries } from '../../domain/flavorMatch.js';
+import { judgeDoubtfulEntries } from '../../gemini/typoJudge.js';
 import { parseAvailabilityImage } from '../../gemini/availabilityParser.js';
 import type { GeminiClient } from '../../gemini/client.js';
 
@@ -44,6 +46,14 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
       });
 
       const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;
+      // Snap the read names to the brand's known spellings, merge the repeats,
+      // then let the model settle whatever the distance rule was unsure about.
+      const known = brand ? (await listFlavorsByBrand(db, brand.id)).map((flavor) => flavor.name) : [];
+      const resolved = resolveEntries(parsed.flavors, known);
+      const entries = brand
+        ? await judgeDoubtfulEntries(geminiClient, brand.name, resolved)
+        : resolved.map(({ checkWith: _flag, ...entry }) => entry);
+
       const weightRow = parsed.grams
         ? ((await db.select().from(weights).all()).find((row) => row.grams === parsed.grams) ?? null)
         : null;
@@ -70,7 +80,7 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
         brandId: brand?.id ?? null,
         detectedGrams: parsed.grams,
         weightId: weightRow?.id ?? null,
-        entries: parsed.flavors,
+        entries,
       };
     });
 

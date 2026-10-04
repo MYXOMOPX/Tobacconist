@@ -90,8 +90,12 @@ export type ResolvedEntry = {
   available: boolean;
   /** What was read off the picture, when it was corrected to another spelling. */
   originalName?: string;
-  /** Close to several known flavours at once; left as read, for a judge to decide. */
-  ambiguousWith?: string[];
+  /**
+   * The match was a guess: close to several known flavours at once (left as
+   * read), or several edits away (already applied). A judge confirms or vetoes
+   * it with these candidates.
+   */
+  checkWith?: string[];
 };
 
 /**
@@ -121,12 +125,13 @@ export function resolveEntries(
         name: match.name,
         available: entry.available,
         ...(match.kind === 'near' || entry.name !== match.name ? { originalName: entry.name } : {}),
+        ...(match.kind === 'near' && match.distance >= 2 ? { checkWith: [match.name] } : {}),
       });
       continue;
     }
 
     const resolved: ResolvedEntry = { name: entry.name, available: entry.available };
-    if (match.kind === 'ambiguous') resolved.ambiguousWith = match.names;
+    if (match.kind === 'ambiguous') resolved.checkWith = match.names;
     result.push(resolved);
     spellings.push(entry.name);
   }

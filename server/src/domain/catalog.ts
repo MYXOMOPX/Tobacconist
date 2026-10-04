@@ -26,11 +26,16 @@ export async function listBrands(db: Db) {
  * case or alphabet, or one typo away, is the flavour we already have — never a
  * second row for it.
  */
-export async function findOrCreateFlavor(db: Db, brandId: number, name: string) {
+export async function findOrCreateFlavor(
+  db: Db,
+  brandId: number,
+  name: string,
+  opts: { exactOnly?: boolean } = {}
+) {
   const trimmed = name.trim();
   const known = await listFlavorsByBrand(db, brandId);
   const match = matchFlavor(trimmed, known.map((flavor) => flavor.name));
-  if (match.kind === 'exact' || match.kind === 'near') {
+  if (match.kind === 'exact' || (match.kind === 'near' && !opts.exactOnly)) {
     const found = known.find((flavor) => flavor.name === match.name);
     if (found) return found;
   }

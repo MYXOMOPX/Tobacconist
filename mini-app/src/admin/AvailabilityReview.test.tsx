@@ -66,6 +66,22 @@ describe('AvailabilityReview', () => {
     );
   });
 
+  it('flags a corrected spelling and shows the original on tap', async () => {
+    vi.mocked(uploadAvailabilityImage).mockResolvedValue({
+      detectedBrandName: 'DarkSide',
+      brandId: 1,
+      detectedGrams: 250,
+      weightId: 2,
+      entries: [{ name: 'Fruitality', available: true, originalName: 'Fruittalllity' }],
+    });
+
+    const { user } = setup();
+    await user.upload(screen.getByLabelText('Скрины наличия'), shot('a.jpg'));
+    await user.click(await screen.findByRole('button', { name: 'Исправлена опечатка' }));
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Распознано: Fruittalllity');
+  });
+
   it('saves the whole batch and reports what was reviewed', async () => {
     vi.mocked(uploadAvailabilityImage).mockResolvedValue({
       detectedBrandName: 'DarkSide',

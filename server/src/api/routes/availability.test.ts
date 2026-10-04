@@ -8,7 +8,7 @@ import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { createTestDb } from '../../db/client';
 import { createVendor } from '../../domain/vendors';
-import { createBrand, getWeights } from '../../domain/catalog';
+import { createBrand, getWeights, findOrCreateFlavor } from '../../domain/catalog';
 import { listVendorAssortment, replaceAvailability } from '../../domain/availability';
 import { availabilityRoutes } from './availability';
 import { availabilityUploads } from '../../db/schema';
@@ -84,6 +84,37 @@ describe('POST /parse', () => {
       ],
     });
     expect(await fs.readdir(uploadsDir)).toHaveLength(1);
+  });
+
+  it('snaps misread flavours to the known list and merges repeats', async () => {
+    const { app, db } = testApp(
+      admin,
+      JSON.stringify({
+        brand: 'DarkSide',
+        grams: 250,
+        flavors: [
+          { name: 'CyberKiwl', available: true },
+          { name: 'Mango', available: true },
+          { name: 'MANGO', available: false },
+        ],
+      })
+    );
+    const vendor = await createVendor(db, 'Vasya');
+    const brand = await createBrand(db, 'DarkSide');
+    await findOrCreateFlavor(db, brand.id, 'CyberKiwi');
+
+    const form = screenshot(vendor.id);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/availability/parse',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+
+    expect(res.json().entries).toEqual([
+      { name: 'CyberKiwi', available: true, originalName: 'CyberKiwl' },
+      { name: 'Mango', available: true },
+    ]);
   });
 
   it('reports an unknown brand as unresolved instead of inventing one', async () => {

@@ -25,10 +25,33 @@ type Group = {
   weightId: number | null;
   /** Set when the detected brand is not in the catalogue and is being created. */
   newBrandName: string;
-  entries: { name: string; available: boolean }[];
+  entries: { name: string; available: boolean; originalName?: string }[];
 };
 
 let counter = 0;
+
+/** Marks a flavour whose spelling was corrected; a tap shows what the photo said. */
+function TypoHint({ original }: { original: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="tb-typo">
+      <button
+        type="button"
+        className="tb-typo__btn"
+        aria-label="Исправлена опечатка"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        ✎
+      </button>
+      {open && (
+        <span className="tb-typo__tip" role="tooltip">
+          Распознано: {original}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /**
  * Spec §4: the admin throws in a pile of screenshots, the model reads the brand,
@@ -232,12 +255,14 @@ export function AvailabilityReview({
             )}
 
             {group.entries.map((entry, index) => (
-              <Toggle
-                key={`${entry.name}-${index}`}
-                label={entry.name}
-                pressed={entry.available}
-                onChange={() => toggleEntry(group.key, index)}
-              />
+              <div className="tb-entry" key={`${entry.name}-${index}`}>
+                <Toggle
+                  label={entry.name}
+                  pressed={entry.available}
+                  onChange={() => toggleEntry(group.key, index)}
+                />
+                {entry.originalName && <TypoHint original={entry.originalName} />}
+              </div>
             ))}
 
             <Button onClick={() => setGroups(groups.filter((g) => g.key !== group.key))}>

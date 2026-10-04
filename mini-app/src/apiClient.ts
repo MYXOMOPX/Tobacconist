@@ -35,7 +35,8 @@ export type ParsedScreenshot = {
   brandId: number | null;
   detectedGrams: number | null;
   weightId: number | null;
-  entries: { name: string; available: boolean }[];
+  /** `originalName` is set when the server corrected a misspelling to a known name. */
+  entries: { name: string; available: boolean; originalName?: string }[];
 };
 
 export async function uploadAvailabilityImage(

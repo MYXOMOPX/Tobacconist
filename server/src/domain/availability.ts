@@ -10,6 +10,8 @@ export async function replaceAvailability(
     brandId: number;
     weightId: number;
     entries: { name: string; available: boolean }[];
+    /** Names were already matched against the catalogue (at /parse): only exact respellings merge. */
+    strictNames?: boolean;
   }
 ) {
   const { vendorId, brandId, weightId, entries } = params;
@@ -38,7 +40,7 @@ export async function replaceAvailability(
   const resultMap = new Map<number, { flavorId: number; flavorName: string; available: boolean }>();
 
   for (const entry of entries) {
-    const flavor = await findOrCreateFlavor(db, brandId, entry.name);
+    const flavor = await findOrCreateFlavor(db, brandId, entry.name, { exactOnly: params.strictNames });
     seenFlavorIds.add(flavor.id);
 
     const existingRowId = rowsByFlavorId.get(flavor.id);
@@ -173,6 +175,7 @@ export async function applyAvailabilityBatch(
         brandId: group.brandId,
         weightId: group.weightId,
         entries: group.entries,
+        strictNames: true,
       }),
     });
   }

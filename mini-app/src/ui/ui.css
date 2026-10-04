@@ -778,3 +778,44 @@
   border: none;
   margin: var(--tb-space-sm) 0;
 }
+
+/* ---------- Corrected-spelling hint ---------- */
+
+.tb-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+}
+
+.tb-entry > .tb-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-typo {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tb-typo__btn {
+  min-width: var(--tb-tap);
+  min-height: var(--tb-tap);
+  background: none;
+  border: 0;
+  color: var(--tb-primary);
+  font-size: var(--tb-size-body);
+  cursor: pointer;
+}
+
+.tb-typo__tip {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: 1;
+  padding: 6px 10px;
+  background: var(--tb-surface-raised, var(--tb-bg));
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-sm);
+  font-size: var(--tb-size-small);
+  white-space: nowrap;
+}

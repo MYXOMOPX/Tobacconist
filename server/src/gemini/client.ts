@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface GeminiClient {
   generateFromImage(params: { imageBase64: string; mimeType: string; prompt: string }): Promise<string>;
+  /** Text only, no picture — used for judging doubtful spellings. */
+  generateText?(params: { prompt: string }): Promise<string>;
 }
 
 /**
@@ -32,6 +34,9 @@ export function createGeminiClient(
       async generateFromImage() {
         throw new Error('no GEMINI_API_KEY is set, so screenshots cannot be recognised');
       },
+      async generateText() {
+        throw new Error('no GEMINI_API_KEY is set, so spellings cannot be judged');
+      },
     };
   }
 
@@ -42,23 +47,30 @@ export function createGeminiClient(
     generationConfig: { responseMimeType: 'application/json' },
   });
 
-  return {
-    async generateFromImage({ imageBase64, mimeType, prompt }) {
-      let lastError: unknown;
-      for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-        try {
-          const result = await model.generateContent([
-            { inlineData: { data: imageBase64, mimeType } },
-            { text: prompt },
-          ]);
-          return result.response.text();
-        } catch (err) {
-          lastError = err;
-          if (!isTransient(err) || attempt === RETRY_DELAYS_MS.length) break;
-          await sleep(RETRY_DELAYS_MS[attempt]);
-        }
+  async function withRetry(call: () => Promise<string>): Promise<string> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        return await call();
+      } catch (err) {
+        lastError = err;
+        if (!isTransient(err) || attempt === RETRY_DELAYS_MS.length) break;
+        await sleep(RETRY_DELAYS_MS[attempt]);
       }
-      throw lastError;
-    },
+    }
+    throw lastError;
+  }
+
+  return {
+    generateFromImage: ({ imageBase64, mimeType, prompt }) =>
+      withRetry(async () => {
+        const result = await model.generateContent([
+          { inlineData: { data: imageBase64, mimeType } },
+          { text: prompt },
+        ]);
+        return result.response.text();
+      }),
+    generateText: ({ prompt }) =>
+      withRetry(async () => (await model.generateContent([{ text: prompt }])).response.text()),
   };
 }
