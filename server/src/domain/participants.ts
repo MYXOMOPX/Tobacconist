@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { orderParticipants } from '../db/schema.js';
+import { orderItems, orderParticipants } from '../db/schema.js';
 
 export type ParticipantRow = typeof orderParticipants.$inferSelect;
 
@@ -51,6 +51,21 @@ export async function setReadiness(db: Db, orderId: number, userId: number, read
     .where(eq(orderParticipants.id, row.id))
     .run();
   return { orderId, userId, ready };
+}
+
+/**
+ * Who has said they are done, out of everyone who put something in the order.
+ * A participant with no lines is not counted: they have nothing to be ready with.
+ */
+export async function readinessProgress(db: Db, orderId: number) {
+  const ordering = new Set(
+    (await db.select({ userId: orderItems.userId }).from(orderItems).where(eq(orderItems.orderId, orderId)).all()).map(
+      (row) => row.userId
+    )
+  );
+  const rows = await db.select().from(orderParticipants).where(eq(orderParticipants.orderId, orderId)).all();
+  const readyCount = rows.filter((row) => row.ready && ordering.has(row.userId)).length;
+  return { readyCount, totalParticipants: ordering.size };
 }
 
 export async function getReadiness(db: Db, orderId: number, userId: number) {

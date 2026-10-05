@@ -235,7 +235,7 @@ export function UiKit() {
               </span>
             </>
           }
-          action={<Button variant="primary">Готов</Button>}
+          action={<Button variant="primary">Я готов(а)</Button>}
         />
       </Section>
 

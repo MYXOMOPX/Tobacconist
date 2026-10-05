@@ -18,6 +18,7 @@ function announcer(): OrderAnnouncer {
   return {
     announceOrderOpened: vi.fn().mockResolvedValue(undefined),
     announceStatusChanged: vi.fn().mockResolvedValue(undefined),
+    announceReadiness: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -188,6 +189,36 @@ describe('orders routes', () => {
     });
     mine = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/mine` });
     expect(mine.json().ready).toBe(false);
+  });
+
+  it('tells the group when a participant becomes ready or takes it back, once per real change', async () => {
+    const db = createTestDb();
+    const { vendor, brand, w250, flavorId } = await seedVendorWithStock(db);
+    const order = await createOrder(db, vendor.id, admin.id);
+    const ann = announcer();
+    const app = testApp(friend, db, ann);
+    await app.inject({
+      method: 'PUT',
+      url: `/api/orders/${order.id}/items`,
+      payload: { brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 },
+    });
+
+    const ready = (value: boolean) =>
+      app.inject({ method: 'POST', url: `/api/orders/${order.id}/ready`, payload: { ready: value } });
+    await ready(true);
+    await ready(true);
+    await ready(false);
+
+    expect(ann.announceReadiness).toHaveBeenCalledTimes(2);
+    expect(ann.announceReadiness).toHaveBeenNthCalledWith(1, {
+      vendorName: 'Vasya',
+      orderId: order.id,
+      participantName: 'Friend',
+      ready: true,
+      readyCount: 1,
+      totalParticipants: 1,
+    });
+    expect(ann.announceReadiness).toHaveBeenNthCalledWith(2, expect.objectContaining({ ready: false, readyCount: 0 }));
   });
 
   it('closes collection, which builds the checklist and locks participants out', async () => {

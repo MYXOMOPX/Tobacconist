@@ -20,6 +20,7 @@ import {
   clearAllReadiness,
   getPaymentStatus,
   getReadiness,
+  readinessProgress,
   setReadiness,
 } from '../../domain/participants.js';
 import type { OrderAnnouncer } from '../../telegram/notify.js';
@@ -197,7 +198,24 @@ export function ordersRoutes(db: Db, orderAnnouncer: OrderAnnouncer) {
         if (order.status !== 'ordering') {
           throw new Error('readiness only means something while the order is collecting');
         }
-        return setReadiness(db, order.id, req.authedUser!.id, req.body.ready);
+        const user = req.authedUser!;
+        const was = await getReadiness(db, order.id, user.id);
+        const result = await setReadiness(db, order.id, user.id, req.body.ready);
+        // Only a real change is news: pressing the same button twice says nothing new.
+        if (was !== req.body.ready) {
+          const progress = await readinessProgress(db, order.id);
+          const vendorName = (await toOrderDto(db, order)).vendorName;
+          await announce(req, () =>
+            orderAnnouncer.announceReadiness({
+              vendorName,
+              orderId: order.id,
+              participantName: user.displayName,
+              ready: req.body.ready,
+              ...progress,
+            })
+          );
+        }
+        return result;
       }
     );
   };

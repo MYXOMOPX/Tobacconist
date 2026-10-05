@@ -10,7 +10,19 @@ export interface OrderAnnouncer {
   announceOrderOpened(vendorName: string, orderId: number): Promise<void>;
   /** Tells the group the order moved on — collection closed, finished, cancelled. */
   announceStatusChanged(vendorName: string, orderId: number, status: OrderStatus): Promise<void>;
+  /** Tells the group a participant marked themselves ready — or took it back. */
+  announceReadiness(change: ReadinessChange): Promise<void>;
 }
+
+export type ReadinessChange = {
+  vendorName: string;
+  orderId: number;
+  participantName: string;
+  ready: boolean;
+  /** How many of the order's participants are ready now, out of all who ordered. */
+  readyCount: number;
+  totalParticipants: number;
+};
 
 /**
  * Stand-in for when the server runs without Telegram (config `devNoTelegram`):
@@ -26,6 +38,11 @@ export function createLoggingOrderAnnouncer(
     },
     async announceStatusChanged(vendorName, orderId, status) {
       log(`[dev] order ${orderId} (${vendorName}) is now ${status} — announcement skipped`);
+    },
+    async announceReadiness(change) {
+      log(
+        `[dev] ${change.participantName} is ${change.ready ? '' : 'not '}ready in order ${change.orderId} — announcement skipped`
+      );
     },
   };
 }
@@ -47,6 +64,18 @@ function statusNotice(vendorName: string, status: OrderStatus): string | null {
     default:
       return null;
   }
+}
+
+function readinessNotice(change: ReadinessChange): string {
+  const progress = `Готовы: ${change.readyCount} из ${change.totalParticipants}.`;
+  if (!change.ready) {
+    return `↩️ ${change.participantName} пока не готов(а) (${change.vendorName}). ${progress}`;
+  }
+  const everyone =
+    change.totalParticipants > 0 && change.readyCount === change.totalParticipants
+      ? ' Все готовы — можно закрывать сбор.'
+      : '';
+  return `✅ ${change.participantName} готов(а) (${change.vendorName}). ${progress}${everyone}`;
 }
 
 /**
@@ -91,6 +120,10 @@ export function createOrderAnnouncer(deps: {
     async announceStatusChanged(vendorName, orderId, status) {
       const text = statusNotice(vendorName, status);
       if (text) await post(text, orderId);
+    },
+
+    async announceReadiness(change) {
+      await post(readinessNotice(change), change.orderId);
     },
   };
 }

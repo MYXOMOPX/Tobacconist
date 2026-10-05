@@ -68,6 +68,34 @@ describe('createOrderAnnouncer', () => {
   });
 });
 
+describe('readiness announcements', () => {
+  const change = {
+    vendorName: 'Vasya',
+    orderId: 42,
+    participantName: 'Ann',
+    ready: true,
+    readyCount: 1,
+    totalParticipants: 3,
+  };
+
+  it('says who is ready and how many are, with the way into the order', async () => {
+    const { sender, announcer: a } = announcer();
+    await a.announceReadiness(change);
+    const [, text, opts] = (sender.sendMessage as any).mock.calls[0];
+    expect(text).toContain('Ann готов(а)');
+    expect(text).toContain('Готовы: 1 из 3');
+    expect(opts.reply_markup.inline_keyboard[0][0].url).toContain('startapp=order_42');
+  });
+
+  it('says so when readiness is taken back, and when everybody is ready', async () => {
+    const { sender, announcer: a } = announcer();
+    await a.announceReadiness({ ...change, ready: false, readyCount: 0 });
+    expect((sender.sendMessage as any).mock.calls[0][1]).toContain('пока не готов(а)');
+    await a.announceReadiness({ ...change, readyCount: 3 });
+    expect((sender.sendMessage as any).mock.calls[1][1]).toContain('Все готовы');
+  });
+});
+
 describe('createLoggingOrderAnnouncer', () => {
   it('logs instead of posting, so dev mode never fails on a missing chat', async () => {
     const log = vi.fn();

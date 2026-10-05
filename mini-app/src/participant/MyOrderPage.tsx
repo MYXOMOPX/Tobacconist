@@ -122,7 +122,7 @@ export function MyOrderPage({ orderId, onBack }: { orderId: number; onBack: () =
         action={
           locked ? undefined : (
             <Button variant={mine.ready ? 'secondary' : 'primary'} onClick={() => setReady(!mine.ready)}>
-              {mine.ready ? 'Не готово' : 'Готово'}
+              {mine.ready ? 'Я не готов(а)' : 'Я готов(а)'}
             </Button>
           )
         }

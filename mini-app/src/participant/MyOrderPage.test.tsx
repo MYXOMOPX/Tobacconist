@@ -61,14 +61,14 @@ describe('MyOrderPage', () => {
     const user = userEvent.setup();
     render(<MyOrderPage orderId={5} onBack={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Готово' }));
+    await user.click(await screen.findByRole('button', { name: 'Я готов(а)' }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith('/orders/5/ready', { ready: true })
     );
 
     mockApi(mine({ ready: true }));
     render(<MyOrderPage orderId={5} onBack={vi.fn()} />);
-    expect(await screen.findByRole('button', { name: 'Не готово' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Я не готов(а)' })).toBeInTheDocument();
   });
 
   it('hides the readiness button once the order is locked for validation', async () => {
@@ -77,8 +77,8 @@ describe('MyOrderPage', () => {
     render(<MyOrderPage orderId={5} onBack={vi.fn()} />);
 
     expect(await screen.findByText(/Добавление позиций закрыто/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Готово' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Не готово' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Я готов(а)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Я не готов(а)' })).not.toBeInTheDocument();
   });
 
   it('offers a way back to picking tobacco', async () => {

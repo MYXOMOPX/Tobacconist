@@ -10,7 +10,7 @@ describe('buildApp', () => {
   it('exposes GET /api/health without requiring auth', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn(), announceReadiness: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
@@ -29,7 +29,7 @@ describe('buildApp', () => {
   it('requires auth for routes registered inside the /api context', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn(), announceReadiness: vi.fn() };
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
@@ -51,7 +51,7 @@ describe('buildApp', () => {
   it('logs unexpected errors handled by the custom error handler', async () => {
     const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: 'member' }) };
     const geminiClient: GeminiClient = { generateFromImage: async () => '[]' };
-    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn() };
+    const orderAnnouncer: OrderAnnouncer = { announceOrderOpened: vi.fn(), announceStatusChanged: vi.fn(), announceReadiness: vi.fn() };
     const lines: string[] = [];
     const stream = new Writable({
       write(chunk, _enc, cb) {
