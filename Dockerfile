@@ -13,6 +13,17 @@ RUN npm run build --workspace=@tobacconist/mini-app
 FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Optional: the agy CLI, for GEMINI_BACKEND=agy (see README). Off by default so
+# an API-key deploy stays lean and builds without reaching Google's installer.
+ARG INSTALL_AGY=false
+RUN if [ "$INSTALL_AGY" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+      && curl -fsSL https://antigravity.google/cli/install.sh | bash \
+      && ln -s /root/.local/bin/agy /usr/local/bin/agy \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/mini-app/dist ./mini-app/dist

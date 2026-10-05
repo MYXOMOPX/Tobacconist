@@ -1,10 +1,15 @@
 services:
   tobacconist:
-    build: ..
+    build:
+      context: ..
+      args:
+        INSTALL_AGY: ${INSTALL_AGY:-false}
     restart: unless-stopped
     env_file: .env
     volumes:
       - tobacconist-data:/app/data
+      # agy's sign-in and settings: survive a rebuild, so login is done once
+      - agy-config:/root/.gemini
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tobacconist.rule=Host(`${PUBLIC_HOST}`)"
@@ -20,3 +25,4 @@ networks:
 
 volumes:
   tobacconist-data:
+  agy-config:

@@ -141,6 +141,24 @@ cd mini-app && npx tsc -p tsconfig.json --noEmit
    curl https://tobacconist.example.com/api/health
    ```
 
+### Gemini через agy в Docker (вместо API-ключа)
+
+Нужно, когда упёрлись в лимиты ключа. agy работает под твоим Google-аккаунтом, а режим «agy с API-ключом» лимитов не снимает — это тот же ключ. Поэтому нужен вход через аккаунт.
+
+1. В `deploy/.env` поставь `INSTALL_AGY=true` и `GEMINI_BACKEND=agy` (`GEMINI_API_KEY` можно убрать). Модель по умолчанию `gemini-3.6-flash-medium`, меняется через `GEMINI_MODEL`.
+2. Пересобери и подними: `cd deploy && docker compose build && docker compose up -d`.
+3. **Один раз** войди в аккаунт внутри контейнера:
+
+   ```bash
+   docker compose exec -it tobacconist agy
+   ```
+
+   agy напечатает ссылку для входа. Открой её в браузере на своём компьютере, войди и вставь полученный код обратно в консоль. Потом выйди из agy (`/exit` или Ctrl+C).
+4. Вход хранится в volume `agy-config` (`/root/.gemini`) и переживает пересборку и перезапуск. Проверь: `docker compose restart tobacconist` и загрузи скрин. Если после перезапуска agy снова просит войти, значит он держит токен в системной связке ключей, которой нет в контейнере. В таком случае напиши, разберёмся.
+5. Проверка без мини-аппа: `docker compose exec tobacconist agy -p "ответь: ок" --output-format json`.
+
+Обновлять `agy` отдельно не нужно: он ставится при `docker compose build`. Чтобы подтянуть новую версию, пересобери с `--no-cache`.
+
 ### Обновление после деплоя
 
 ```bash
