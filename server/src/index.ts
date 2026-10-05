@@ -4,6 +4,7 @@ import { webhookCallback } from 'grammy';
 import { loadConfig, type Config } from './config.js';
 import { createDb } from './db/client.js';
 import { createGeminiClient } from './gemini/client.js';
+import { createAgyClient } from './gemini/agyClient.js';
 import { createBot } from './telegram/bot.js';
 import { createLoggingOrderAnnouncer, createOrderAnnouncer } from './telegram/notify.js';
 import type { ChatMemberApi } from './telegram/auth.js';
@@ -20,7 +21,10 @@ const devChatMemberApi: ChatMemberApi = {
 
 export function createServer(config: Config) {
   const db = createDb(config.dbPath);
-  const geminiClient = createGeminiClient(config.geminiApiKey, config.geminiModel);
+  const geminiClient =
+    config.geminiBackend === 'agy'
+      ? createAgyClient({ command: config.agyPath, model: config.geminiModel, timeoutMs: config.agyTimeoutMs })
+      : createGeminiClient(config.geminiApiKey, config.geminiModel);
   // Without a bot token there is no bot to build, so dev mode goes without one:
   // no webhook, and announcements only reach the log.
   const bot = config.devNoTelegram
@@ -73,7 +77,7 @@ export async function main() {
     }
   } else {
     console.log('[dev] DEV_NO_TELEGRAM=true — no bot, no webhook, identity from X-Dev-User');
-    if (!config.geminiApiKey) {
+    if (config.geminiBackend === 'api' && !config.geminiApiKey) {
       console.log('[dev] no GEMINI_API_KEY — everything works except reading price screenshots');
     }
   }

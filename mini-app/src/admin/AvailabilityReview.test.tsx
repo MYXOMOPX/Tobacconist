@@ -212,6 +212,8 @@ describe('AvailabilityReview', () => {
     await user.upload(screen.getByLabelText('Скрины наличия'), [shot('blurry.jpg'), shot('good.jpg')]);
 
     expect(await screen.findByText(/Не удалось распознать: blurry.jpg/)).toBeInTheDocument();
+    // The server's explanation is shown, not swallowed.
+    expect(screen.getByText('failed to parse availability image')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Needls/ })).toBeInTheDocument();
   });
 

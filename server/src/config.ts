@@ -1,12 +1,18 @@
 import type { UserFromGetMe } from 'grammy/types';
 import { DEFAULT_GEMINI_MODEL } from './gemini/client.js';
+import { DEFAULT_AGY_MODEL } from './gemini/agyClient.js';
 
 export type Config = {
   botToken: string;
   adminTelegramId: string;
   groupChatId: string;
+  /** `api`: Google's API with a key. `agy`: the signed-in agy CLI, which has no key limits. */
+  geminiBackend: 'api' | 'agy';
   geminiApiKey: string;
   geminiModel: string;
+  /** Path of the agy executable; plain `agy` is looked up on PATH. */
+  agyPath: string;
+  agyTimeoutMs: number;
   dbPath: string;
   port: number;
   publicUrl: string;
@@ -41,14 +47,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     return devNoTelegram ? (env[key] ?? devFallback) : required(key);
   }
 
+  const geminiBackend = env.GEMINI_BACKEND === 'agy' ? 'agy' : 'api';
+  if (env.GEMINI_BACKEND && !['api', 'agy'].includes(env.GEMINI_BACKEND)) {
+    throw new Error(`GEMINI_BACKEND must be "api" or "agy", got "${env.GEMINI_BACKEND}"`);
+  }
+
   const port = Number(env.PORT ?? 3000);
   return {
     botToken: requiredUnlessDev('BOT_TOKEN'),
     adminTelegramId: requiredUnlessDev('TELEGRAM_ADMIN_ID'),
     groupChatId: requiredUnlessDev('TELEGRAM_GROUP_CHAT_ID'),
-    geminiApiKey: requiredUnlessDev('GEMINI_API_KEY'),
+    geminiBackend,
+    // The key is only needed for the API backend; agy brings its own sign-in.
+    geminiApiKey: geminiBackend === 'api' ? requiredUnlessDev('GEMINI_API_KEY') : (env.GEMINI_API_KEY ?? ''),
     // Google retires model ids; overridable so a retirement needs no code release.
-    geminiModel: env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+    // The agy CLI names its models differently (see `agy models`), so it has its own default.
+    geminiModel: env.GEMINI_MODEL || (geminiBackend === 'agy' ? DEFAULT_AGY_MODEL : DEFAULT_GEMINI_MODEL),
+    agyPath: env.AGY_PATH || 'agy',
+    agyTimeoutMs: Number(env.AGY_TIMEOUT_SECONDS ?? 180) * 1000,
     dbPath: env.DB_PATH ?? './data/tobacconist.sqlite3',
     port,
     publicUrl: requiredUnlessDev('PUBLIC_URL', `http://localhost:${port}`),

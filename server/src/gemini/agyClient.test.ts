@@ -1,0 +1,53 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createAgyClient, DEFAULT_AGY_MODEL, type AgyRunner } from './agyClient';
+
+const reply = (body: object) => JSON.stringify({ status: 'SUCCESS', ...body });
+
+describe('createAgyClient', () => {
+  it('runs agy read-only with the model and returns its response', async () => {
+    const run = vi.fn<AgyRunner>(async () => ({ stdout: reply({ response: '{"ok":true}' }), stderr: '' }));
+    const client = createAgyClient({ run, model: 'gemini-3.8-flash-high' });
+
+    expect(await client.generateText!({ prompt: 'hi' })).toBe('{"ok":true}');
+    const [command, args] = run.mock.calls[0];
+    expect(command).toBe('agy');
+    expect(args).toEqual(expect.arrayContaining(['--model', 'gemini-3.8-flash-high', '--mode', 'plan', 'json']));
+    expect(args[args.indexOf('--print') + 1]).toBe('hi');
+  });
+
+  it('hands an image over as a file the prompt points at', async () => {
+    const run = vi.fn<AgyRunner>(async () => ({ stdout: reply({ response: 'x' }), stderr: '' }));
+    await createAgyClient({ run }).generateFromImage({ imageBase64: 'AAAA', mimeType: 'image/png', prompt: 'read it' });
+    const [, args] = run.mock.calls[0];
+    expect(args[args.indexOf('--print') + 1]).toMatch(/screenshot\.png".*read it/s);
+    expect(args[args.indexOf('--model') + 1]).toBe(DEFAULT_AGY_MODEL);
+  });
+
+  it('says so when agy is not installed', async () => {
+    const run: AgyRunner = async () => {
+      throw Object.assign(new Error('spawn agy ENOENT'), { code: 'ENOENT' });
+    };
+    await expect(createAgyClient({ run }).generateText!({ prompt: 'x' })).rejects.toThrow('agy');
+  });
+
+  it('turns a quota refusal and an unknown model into explained errors', async () => {
+    const quota: AgyRunner = async () => {
+      throw Object.assign(new Error('exit 1'), { stderr: 'error: quota exceeded (429)', stdout: '' });
+    };
+    await expect(createAgyClient({ run: quota }).generateText!({ prompt: 'x' })).rejects.toThrow('Исчерпан лимит');
+
+    const model: AgyRunner = async () => {
+      throw Object.assign(new Error('exit 1'), { stderr: 'invalid model selection: not recognized', stdout: '' });
+    };
+    await expect(createAgyClient({ run: model }).generateText!({ prompt: 'x' })).rejects.toThrow('GEMINI_MODEL');
+  });
+
+  it('reports a timeout and a garbled reply', async () => {
+    const slow: AgyRunner = async () => {
+      throw Object.assign(new Error('killed'), { killed: true });
+    };
+    await expect(createAgyClient({ run: slow }).generateText!({ prompt: 'x' })).rejects.toThrow('слишком долго');
+    const garbled: AgyRunner = async () => ({ stdout: 'oops', stderr: '' });
+    await expect(createAgyClient({ run: garbled }).generateText!({ prompt: 'x' })).rejects.toThrow('формате');
+  });
+});

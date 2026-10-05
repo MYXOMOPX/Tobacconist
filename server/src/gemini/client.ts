@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GeminiError, classifyGeminiError } from './errors.js';
 
 export interface GeminiClient {
   generateFromImage(params: { imageBase64: string; mimeType: string; prompt: string }): Promise<string>;
@@ -11,7 +12,7 @@ export interface GeminiClient {
  * answering 404 while this app was live. The id therefore lives in config, so a
  * retirement is an env change and a restart rather than a code release.
  */
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
 
 /** The API returns 503 under load often enough that a single attempt is not reliable. */
 const RETRY_DELAYS_MS = [500, 2000, 5000];
@@ -32,10 +33,10 @@ export function createGeminiClient(
   if (!apiKey) {
     return {
       async generateFromImage() {
-        throw new Error('no GEMINI_API_KEY is set, so screenshots cannot be recognised');
+        throw new GeminiError('not_configured', 'no GEMINI_API_KEY is set');
       },
       async generateText() {
-        throw new Error('no GEMINI_API_KEY is set, so spellings cannot be judged');
+        throw new GeminiError('not_configured', 'no GEMINI_API_KEY is set');
       },
     };
   }
@@ -58,7 +59,7 @@ export function createGeminiClient(
         await sleep(RETRY_DELAYS_MS[attempt]);
       }
     }
-    throw lastError;
+    throw classifyGeminiError(lastError);
   }
 
   return {

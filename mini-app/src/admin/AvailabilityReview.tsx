@@ -79,7 +79,7 @@ export function AvailabilityReview({
     groupsRef.current = typeof next === 'function' ? next(groupsRef.current) : next;
     setGroupsState(groupsRef.current);
   }
-  const [failures, setFailures] = useState<string[]>([]);
+  const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
   const [wipeOthers, setWipeOthers] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -105,15 +105,16 @@ export function AvailabilityReview({
     const picked = Array.from(files);
     return run(async () => {
       setBusy(true);
-      const failed: string[] = [];
+      const failed: { name: string; reason: string }[] = [];
       try {
         for (const file of picked) {
           let parsed: ParsedScreenshot;
           try {
             parsed = await uploadAvailabilityImage(vendorId, file, sessionNames());
-          } catch {
-            // One unreadable screenshot must not throw away the rest of the batch.
-            failed.push(file.name);
+          } catch (err) {
+            // One unreadable screenshot must not throw away the rest of the batch;
+            // the reason (quota, wrong model…) is kept so the admin can act on it.
+            failed.push({ name: file.name, reason: err instanceof Error ? err.message : '' });
             continue;
           }
           setGroups((current) => merge(current, parsed, file.name));
@@ -212,7 +213,15 @@ export function AvailabilityReview({
 
       {error && <Banner tone="danger">{error}</Banner>}
       {failures.length > 0 && (
-        <Banner tone="warning">Не удалось распознать: {failures.join(', ')}. Попробуй перезалить.</Banner>
+        <Banner tone="warning">
+          Не удалось распознать: {failures.map((failure) => failure.name).join(', ')}.
+          {[...new Set(failures.map((failure) => failure.reason).filter(Boolean))].map((reason) => (
+            <span key={reason} style={{ display: 'block' }}>
+              {reason}
+            </span>
+          ))}
+          Попробуй перезалить.
+        </Banner>
       )}
 
       <span className="tb-field">

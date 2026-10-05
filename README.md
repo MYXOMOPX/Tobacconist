@@ -35,8 +35,11 @@ npm install
 | `BOT_TOKEN` | да | токен бота от BotFather |
 | `TELEGRAM_ADMIN_ID` | да | Telegram id администратора |
 | `TELEGRAM_GROUP_CHAT_ID` | да | id группового чата |
-| `GEMINI_API_KEY` | да | API-ключ Gemini |
-| `GEMINI_MODEL` | нет, по умолчанию `gemini-2.5-flash` | id модели vision. Google выводит старые id из обращения (`gemini-1.5-flash` начал отвечать 404) — тогда меняется здесь, без релиза кода |
+| `GEMINI_BACKEND` | нет, по умолчанию `api` | `api` — Gemini API по ключу; `agy` — локально установленный и залогиненный CLI agy, у него нет лимитов ключа. agy должен стоять на той машине, где запущен сервер (в Docker-образе его нет — для agy запускай сервер на хосте) |
+| `GEMINI_API_KEY` | да при `GEMINI_BACKEND=api` | API-ключ Gemini |
+| `GEMINI_MODEL` | нет, по умолчанию `gemini-3.5-flash` (для agy — `gemini-3.6-flash-medium`) | id модели. Для agy это id из `agy models` (например `gemini-3.8-flash-high`). Google выводит старые id из обращения — тогда меняется здесь, без релиза кода |
+| `AGY_PATH` | нет, по умолчанию `agy` | путь к исполняемому файлу agy |
+| `AGY_TIMEOUT_SECONDS` | нет, по умолчанию `180` | сколько ждать ответа agy на один скрин |
 | `PUBLIC_URL` | да | публичный HTTPS-адрес бэкенда (используется для регистрации webhook) |
 | `TELEGRAM_MINIAPP_LINK` | почти да | прямая ссылка на Mini App из BotFather, например `https://t.me/mybot/order`. Без неё бот постит объявления **без кнопки** «Открыть заказ» (см. ниже) |
 | `DB_PATH` | нет, по умолчанию `./data/tobacconist.sqlite3` | путь к файлу SQLite |

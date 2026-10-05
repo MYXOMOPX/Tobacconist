@@ -34,6 +34,9 @@ export function buildApp(deps: {
   const app = Fastify({ logger: deps.logger ?? true });
   app.setErrorHandler((err, req, reply) => {
     if (err.statusCode) {
+      // Model failures are the server's business too: the reply is for the admin,
+      // the log keeps the provider's own words.
+      if (err.name === 'GeminiError') req.log.warn({ err }, 'gemini request failed');
       reply.code(err.statusCode).send({ error: err.message });
       return;
     }

@@ -1,4 +1,5 @@
 import type { GeminiClient } from './client.js';
+import { GeminiError } from './errors.js';
 
 /**
  * Reads a vendor's stock screenshot. The brand and the pack weight are usually
@@ -20,7 +21,7 @@ function extractJson(text: string): string {
 }
 
 function fail(reason: string): never {
-  throw new Error(`failed to parse Gemini availability response: ${reason}`);
+  throw new GeminiError('bad_response', reason);
 }
 
 export async function parseAvailabilityImage(

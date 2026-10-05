@@ -36,4 +36,35 @@ describe('loadConfig', () => {
       devAdminName: 'Ann',
     });
   });
+
+  it('defaults to the API backend and the 3.5 flash model', () => {
+    expect(loadConfig(prodEnv)).toMatchObject({
+      geminiBackend: 'api',
+      geminiModel: 'gemini-3.5-flash',
+      agyPath: 'agy',
+      agyTimeoutMs: 180000,
+    });
+  });
+
+  it('runs on agy without an API key, with its own default model', () => {
+    const config = loadConfig({ ...prodEnv, GEMINI_API_KEY: undefined, GEMINI_BACKEND: 'agy' });
+    expect(config).toMatchObject({ geminiBackend: 'agy', geminiApiKey: '' });
+    expect(config.geminiModel).toMatch(/^gemini-3\./);
+  });
+
+  it('lets the model, the agy path and its timeout be set', () => {
+    expect(
+      loadConfig({
+        ...prodEnv,
+        GEMINI_BACKEND: 'agy',
+        GEMINI_MODEL: 'gemini-3.8-flash-high',
+        AGY_PATH: '/opt/agy',
+        AGY_TIMEOUT_SECONDS: '60',
+      })
+    ).toMatchObject({ geminiModel: 'gemini-3.8-flash-high', agyPath: '/opt/agy', agyTimeoutMs: 60000 });
+  });
+
+  it('refuses an unknown backend instead of silently using the API', () => {
+    expect(() => loadConfig({ ...prodEnv, GEMINI_BACKEND: 'agi' })).toThrow('GEMINI_BACKEND');
+  });
 });
