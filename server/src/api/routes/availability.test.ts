@@ -117,6 +117,53 @@ describe('POST /parse', () => {
     ]);
   });
 
+  it('checks names against the other screenshots of the same brand only', async () => {
+    const { app, db } = testApp(
+      admin,
+      JSON.stringify({
+        brand: 'DarkSide',
+        grams: 100,
+        flavors: [{ name: 'Fruity Dast', available: true }],
+      })
+    );
+    const vendor = await createVendor(db, 'Vasya');
+    const dark = await createBrand(db, 'DarkSide');
+    const form = screenshot(vendor.id);
+    form.append(
+      'sessionNames',
+      JSON.stringify([
+        { brandId: dark.id, names: ['Fruity Dust'] },
+        { brandId: dark.id + 99, names: ['Fruity Dast'] },
+      ])
+    );
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/availability/parse',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+    expect(res.json().entries).toEqual([{ name: 'Fruity Dust', available: true, originalName: 'Fruity Dast' }]);
+  });
+
+  it('leaves another brand alone: a similar name there is a different flavour', async () => {
+    const { app, db } = testApp(
+      admin,
+      JSON.stringify({ brand: 'Blackburn', grams: 100, flavors: [{ name: 'Fruily Dast', available: true }] })
+    );
+    const vendor = await createVendor(db, 'Vasya');
+    const dark = await createBrand(db, 'DarkSide');
+    await createBrand(db, 'Blackburn');
+    await findOrCreateFlavor(db, dark.id, 'Fruity Dust');
+    const form = screenshot(vendor.id);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/availability/parse',
+      payload: form,
+      headers: form.getHeaders(),
+    });
+    expect(res.json().entries).toEqual([{ name: 'Fruily Dast', available: true }]);
+  });
+
   it('reports an unknown brand as unresolved instead of inventing one', async () => {
     const { app, db } = testApp(
       admin,

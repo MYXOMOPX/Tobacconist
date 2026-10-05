@@ -71,12 +71,34 @@ export function AvailabilityReview({
   weights: Weight[];
   onSaved: () => void;
 }) {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroupsState] = useState<Group[]>([]);
+  // The latest groups, readable inside the parsing loop, which outlives a render.
+  const groupsRef = useRef<Group[]>([]);
+
+  function setGroups(next: Group[] | ((current: Group[]) => Group[])) {
+    groupsRef.current = typeof next === 'function' ? next(groupsRef.current) : next;
+    setGroupsState(groupsRef.current);
+  }
   const [failures, setFailures] = useState<string[]>([]);
   const [wipeOthers, setWipeOthers] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const { error, run } = useAction();
+
+  /**
+   * What this session has already read, by brand: the next screenshot of the same
+   * brand is checked against it, so a typo cannot hide behind a different photo.
+   */
+  function sessionNames() {
+    const byBrand = new Map<number, Set<string>>();
+    for (const group of groupsRef.current) {
+      if (!group.brandId) continue;
+      const names = byBrand.get(group.brandId) ?? new Set<string>();
+      for (const entry of group.entries) names.add(entry.name);
+      byBrand.set(group.brandId, names);
+    }
+    return [...byBrand].map(([brandId, names]) => ({ brandId, names: [...names] }));
+  }
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -88,7 +110,7 @@ export function AvailabilityReview({
         for (const file of picked) {
           let parsed: ParsedScreenshot;
           try {
-            parsed = await uploadAvailabilityImage(vendorId, file);
+            parsed = await uploadAvailabilityImage(vendorId, file, sessionNames());
           } catch {
             // One unreadable screenshot must not throw away the rest of the batch.
             failed.push(file.name);

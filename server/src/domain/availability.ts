@@ -9,7 +9,8 @@ import {
   orderItems,
   deliveryChecklistItems,
 } from '../db/schema.js';
-import { findOrCreateFlavor } from './catalog.js';
+import { findOrCreateFlavor, listFlavorsByBrand } from './catalog.js';
+import { resolveEntries } from './flavorMatch.js';
 
 export async function replaceAvailability(
   db: Db,
@@ -180,7 +181,23 @@ export async function applyAvailabilityBatch(
   db: Db,
   params: { vendorId: number; groups: AvailabilityGroup[]; wipeOthers?: boolean }
 ) {
-  const { vendorId, groups } = params;
+  const { vendorId } = params;
+
+  // The same brand across every group (any weight) must agree on its spellings.
+  // The review screen already asked for this; here it is enforced regardless.
+  const spellingsByBrand = new Map<number, string[]>();
+  const groups: AvailabilityGroup[] = [];
+  for (const original of params.groups) {
+    let spellings = spellingsByBrand.get(original.brandId);
+    if (!spellings) {
+      spellings = (await listFlavorsByBrand(db, original.brandId)).map((flavor) => flavor.name);
+      spellingsByBrand.set(original.brandId, spellings);
+    }
+    const entries = resolveEntries(original.entries, spellings).map(({ name, available }) => ({ name, available }));
+    for (const entry of entries) if (!spellings.includes(entry.name)) spellings.push(entry.name);
+    groups.push({ ...original, entries });
+  }
+
   const applied = [];
   for (const group of groups) {
     applied.push({

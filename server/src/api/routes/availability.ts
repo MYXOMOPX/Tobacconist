@@ -23,6 +23,7 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
      */
     api.post('/parse', async (req, reply) => {
       let vendorId: number | undefined;
+      let sessionNames: { brandId: number; names: string[] }[] = [];
       let fileBuffer: Buffer | undefined;
       let mimeType = 'image/jpeg';
 
@@ -32,6 +33,13 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
           mimeType = part.mimetype;
         } else if (part.type === 'field' && part.fieldname === 'vendorId') {
           vendorId = Number(part.value);
+        } else if (part.type === 'field' && part.fieldname === 'sessionNames') {
+          try {
+            const parsedNames: unknown = JSON.parse(String(part.value));
+            if (Array.isArray(parsedNames)) sessionNames = parsedNames;
+          } catch {
+            // A malformed hint only costs the cross-screenshot check, not the parse.
+          }
         }
       }
 
@@ -48,7 +56,18 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
       const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;
       // Snap the read names to the brand's known spellings, merge the repeats,
       // then let the model settle whatever the distance rule was unsure about.
+      // Known = the catalogue plus what the other screenshots of this session
+      // already said about the same brand (any weight): names must agree across
+      // them. Other brands are deliberately not consulted.
       const known = brand ? (await listFlavorsByBrand(db, brand.id)).map((flavor) => flavor.name) : [];
+      if (brand) {
+        for (const sibling of sessionNames) {
+          if (sibling?.brandId !== brand.id || !Array.isArray(sibling.names)) continue;
+          for (const name of sibling.names) {
+            if (typeof name === 'string' && !known.includes(name)) known.push(name);
+          }
+        }
+      }
       const resolved = resolveEntries(parsed.flavors, known);
       const entries = brand
         ? await judgeDoubtfulEntries(geminiClient, brand.name, resolved)

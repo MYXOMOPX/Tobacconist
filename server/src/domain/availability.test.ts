@@ -230,6 +230,22 @@ describe('applyAvailabilityBatch', () => {
     expect(stock.map((row) => row.flavorName)).toEqual(['Needls']);
   });
 
+  it('makes screenshots of one brand agree on spellings, whatever the weight', async () => {
+    const { db, vendor, dark, w250, w100 } = await vendorWithTwoBrands();
+    await applyAvailabilityBatch(db, {
+      vendorId: vendor.id,
+      groups: [
+        { brandId: dark.id, weightId: w250.id, entries: [{ name: 'Fruity Dust', available: true }] },
+        { brandId: dark.id, weightId: w100.id, entries: [{ name: 'Fruity Dast', available: true }] },
+      ],
+    });
+    const all = await listVendorAssortment(db, vendor.id);
+    expect(all.map((row) => [row.flavorName, row.grams])).toEqual([
+      ['Fruity Dust', 100],
+      ['Fruity Dust', 250],
+    ]);
+  });
+
   it('wipeOthers erases rows nobody ordered, and keeps struck-through ones the batch listed', async () => {
     const { db, vendor, dark, must, w250 } = await vendorWithTwoBrands();
     await replaceAvailability(db, {

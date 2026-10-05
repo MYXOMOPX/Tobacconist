@@ -39,12 +39,17 @@ export type ParsedScreenshot = {
   entries: { name: string; available: boolean; originalName?: string }[];
 };
 
+/** Flavour names already read from this session's other screenshots, per brand. */
+export type SessionNames = { brandId: number; names: string[] }[];
+
 export async function uploadAvailabilityImage(
   vendorId: number,
-  file: File
+  file: File,
+  sessionNames: SessionNames = []
 ): Promise<ParsedScreenshot> {
   const form = new FormData();
   form.append('vendorId', String(vendorId));
+  if (sessionNames.length > 0) form.append('sessionNames', JSON.stringify(sessionNames));
   form.append('image', file);
 
   const res = await fetch(`${BASE_URL}/admin/availability/parse`, {
