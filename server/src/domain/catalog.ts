@@ -57,7 +57,9 @@ export async function importFlavorList(db: Db, brandId: number, text: string) {
   const skipped: string[] = [];
   for (const line of lines) {
     const before = (await listFlavorsByBrand(db, brandId)).length;
-    await findOrCreateFlavor(db, brandId, line);
+    // The list is the authority, so only a respelling of the same name merges;
+    // a typo-distance neighbour is a different flavour until proven otherwise.
+    await findOrCreateFlavor(db, brandId, line, { exactOnly: true });
     const after = (await listFlavorsByBrand(db, brandId)).length;
     (after > before ? added : skipped).push(line);
   }

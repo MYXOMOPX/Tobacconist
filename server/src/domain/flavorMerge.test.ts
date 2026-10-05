@@ -33,7 +33,7 @@ describe('duplicate clusters', () => {
     await add('FRUITTALLLITY');
     await add('MINT');
     await add('MIST');
-    const clusters = await findDuplicateClusters(db, brand.id);
+    const clusters = await findDuplicateClusters(db, brand.id, { wide: true });
     expect(clusters.map((c) => c.map((f) => f.name).sort()).sort()).toEqual([
       ['FRUITALITY', 'FRUITTALLLITY'],
       ['FRUITY DUST', 'Fruity Dust '],
@@ -45,7 +45,7 @@ describe('duplicate clusters', () => {
     await add('FRUITTALLLITY');
     const good = await add('FRUITALITY');
     await stock(good.id, true);
-    const [group] = await proposeMerges(db, await findDuplicateClusters(db, brand.id));
+    const [group] = await proposeMerges(db, await findDuplicateClusters(db, brand.id, { wide: true }));
     expect(group.keep.name).toBe('FRUITALITY');
     expect(group.fuzzy).toBe(true);
   });
@@ -130,12 +130,15 @@ describe('reviewDuplicates', () => {
     expect(out.groups[0].duplicates.map((d) => d.name)).toEqual(['FRUITTALLLITY']);
   });
 
-  it('falls back to the distance rule when the model fails', async () => {
+  it('falls back to the safe distance when the model fails', async () => {
     const { db, brand, add } = await setup();
     await add('FRUITALITY');
-    await add('FRUITTALLLITY');
+    await add('FRUITALITLY');
+    await add('KASHMIR LEMON');
+    await add('KASHMIR LIME');
     const out = await reviewDuplicates(db, textClient(new Error('503')), brand);
     expect(out.groups).toHaveLength(1);
+    expect(out.groups[0].keep.name).toBe('FRUITALITY');
     expect(out.judgedByAi).toBe(false);
   });
 });

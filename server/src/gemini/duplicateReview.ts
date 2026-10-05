@@ -26,21 +26,27 @@ function parseAnswers(raw: string): Answer[] {
  * What "find duplicates and typos" would merge in one brand, without merging it.
  * Exact twins (same name once normalised) go straight in; clusters held together
  * only by the typo-distance rule are put to the model, which may split them or
- * decline. If the model is unreachable the distance rule's proposal stands, so
- * the preview still appears — the admin confirms it either way.
+ * decline. If the model is unreachable only the safe-distance proposal is shown,
+ * and the admin confirms it either way.
  */
 export async function reviewDuplicates(
   db: Db,
   client: GeminiClient,
   brand: { id: number; name: string }
 ): Promise<{ groups: DuplicateGroup[]; judgedByAi: boolean }> {
-  const clusters = await findDuplicateClusters(db, brand.id);
+  // Without the model only the safe distance is trusted; with it, the wide net
+  // is cast and the model decides which of the catches are real.
+  const safeClusters = await findDuplicateClusters(db, brand.id);
+  const safe = await proposeMerges(db, safeClusters);
+  if (!client.generateText) return { groups: safe, judgedByAi: false };
+
+  const clusters = await findDuplicateClusters(db, brand.id, { wide: true });
   const proposals = await proposeMerges(db, clusters);
 
   const doubtful = proposals
     .map((group, index) => ({ group, index }))
     .filter(({ group }) => group.fuzzy);
-  if (doubtful.length === 0 || !client.generateText) return { groups: proposals, judgedByAi: false };
+  if (doubtful.length === 0) return { groups: proposals, judgedByAi: false };
 
   const cases = doubtful.map(({ index }, id) => ({ id, names: clusters[index].map((m) => m.name) }));
   let answers: Answer[];
@@ -49,17 +55,15 @@ export async function reviewDuplicates(
       await client.generateText({ prompt: `${PROMPT}\n\nBrand: ${brand.name}\nCases: ${JSON.stringify(cases)}` })
     );
   } catch {
-    return { groups: proposals, judgedByAi: false };
+    return { groups: safe, judgedByAi: false };
   }
 
   const result: DuplicateGroup[] = proposals.filter((group) => !group.fuzzy);
   doubtful.forEach(({ group, index }, id) => {
     const members: FlavorRef[] = clusters[index];
     const answer = answers.find((a) => a.id === id);
-    if (!answer) {
-      result.push(group);
-      return;
-    }
+    // No answer for a case: take only what the safe distance already vouched for.
+    if (!answer) return;
     const keep = members.find((m) => m.name === answer.canonical);
     const duplicates = members.filter(
       (m) => m !== keep && answer.same.includes(m.name)

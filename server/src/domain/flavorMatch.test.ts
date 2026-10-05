@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   damerauLevenshtein,
   matchFlavor,
+  maxDoubtfulDistance,
   maxTypoDistance,
   normalizeFlavorName,
   resolveEntries,
@@ -28,7 +29,8 @@ describe('damerauLevenshtein', () => {
 
 describe('maxTypoDistance', () => {
   it('allows nothing for very short names, more for long ones', () => {
-    expect([4, 5, 8, 9, 10, 20].map(maxTypoDistance)).toEqual([0, 1, 1, 2, 3, 6]);
+    expect([4, 5, 8, 9, 10, 20].map(maxTypoDistance)).toEqual([0, 1, 1, 2, 2, 2]);
+    expect([4, 8, 9, 10, 20].map(maxDoubtfulDistance)).toEqual([0, 1, 2, 3, 6]);
   });
 });
 
@@ -37,7 +39,14 @@ describe('matchFlavor', () => {
     expect(matchFlavor('fruity dust', ['FRUITY DUST'])).toEqual({ kind: 'exact', name: 'FRUITY DUST' });
   });
   it('finds a typo', () => {
-    expect(matchFlavor('FRUITTALLLITY', ['FRUITALITY'])).toMatchObject({ kind: 'near', name: 'FRUITALITY' });
+    expect(matchFlavor('FRUITALITLY', ['FRUITALITY'])).toMatchObject({ kind: 'near', name: 'FRUITALITY' });
+  });
+  it('only wonders about a heavily mangled name, leaving the call to a judge', () => {
+    expect(matchFlavor('FRUITTALLLITY', ['FRUITALITY'])).toMatchObject({ kind: 'doubtful', names: ['FRUITALITY'] });
+  });
+  it('keeps real flavours three edits apart separate', () => {
+    expect(matchFlavor('Kashmir Lime', ['Kashmir Lemon'])).toMatchObject({ kind: 'doubtful' });
+    expect(matchFlavor('Pear Lemonade', ['Berry Lemonade'])).toMatchObject({ kind: 'doubtful' });
   });
   it('does not merge short different flavours', () => {
     expect(matchFlavor('MIST', ['MINT']).kind).toBe('none');
@@ -49,19 +58,24 @@ describe('matchFlavor', () => {
 
 describe('resolveEntries', () => {
   it('snaps to a known spelling and remembers the original', () => {
+    expect(resolveEntries([{ name: 'FRUITALITLY', available: true }], ['FRUITALITY'])).toEqual([
+      { name: 'FRUITALITY', available: true, originalName: 'FRUITALITLY' },
+    ]);
+  });
+  it('leaves a heavily mangled name as read, flagged for the judge', () => {
     expect(resolveEntries([{ name: 'FRUITTALLLITY', available: true }], ['FRUITALITY'])).toEqual([
-      { name: 'FRUITALITY', available: true, originalName: 'FRUITTALLLITY', checkWith: ['FRUITALITY'] },
+      { name: 'FRUITTALLLITY', available: true, checkWith: ['FRUITALITY'] },
     ]);
   });
   it('merges typos inside one batch, first spelling wins', () => {
     const out = resolveEntries(
       [
         { name: 'FRUITALITY', available: true },
-        { name: 'FRUITTALLLITY', available: false },
+        { name: 'FRUITALITLY', available: false },
       ],
       []
     );
-    expect(out).toEqual([{ name: 'FRUITALITY', available: true, originalName: 'FRUITTALLLITY' }]);
+    expect(out).toEqual([{ name: 'FRUITALITY', available: true, originalName: 'FRUITALITLY' }]);
   });
   it('merges exact duplicates, in stock if either is', () => {
     const out = resolveEntries(

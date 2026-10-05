@@ -90,4 +90,11 @@ describe('flavour matching in the catalogue', () => {
     const result = await importFlavorList(db, brand.id, 'MINT\nCherry Rocks\r\n\n cherry rocks');
     expect(result).toEqual({ added: ['Cherry Rocks'], skipped: ['MINT', 'cherry rocks'] });
   });
+
+  it('imports flavours that are only a few letters apart as separate flavours', async () => {
+    const db = createTestDb();
+    const brand = await createBrand(db, 'Test');
+    const result = await importFlavorList(db, brand.id, ['Kashmir Lemon', 'Kashmir Lime', 'Pear Lemonade', 'Berry Lemonade'].join(String.fromCharCode(10)));
+    expect(result.added).toHaveLength(4);
+  });
 });

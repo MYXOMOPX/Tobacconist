@@ -44,14 +44,24 @@ export function damerauLevenshtein(a: string, b: string): number {
 }
 
 /**
- * How many edits still count as "the same flavour". Short names get none: one
- * letter turns "MINT" into "MIST", a different flavour, not a typo.
+ * How many edits still count as "the same flavour" with no one to ask. Short
+ * names get none: one letter turns "MINT" into "MIST", a different flavour.
+ * The cap is 2 because real flavours sit three edits apart ("Kashmir Lime" and
+ * "Kashmir Lemon"), and merging those would be silent data loss.
  */
 export function maxTypoDistance(length: number): number {
   if (length <= 4) return 0;
   if (length <= 8) return 1;
-  // Long names carry proportionally more noise: ~30% of the letters.
-  return Math.max(2, Math.floor(length * 0.3));
+  return 2;
+}
+
+/**
+ * The wider net, ~30% of the letters, for long names mangled by OCR
+ * ("FRUITTALLLITY"). Too loose to trust on its own: a match this far is only a
+ * question for the judge (or the admin's preview), never merged silently.
+ */
+export function maxDoubtfulDistance(length: number): number {
+  return length < 9 ? maxTypoDistance(length) : Math.max(maxTypoDistance(length), Math.floor(length * 0.3));
 }
 
 export type FlavorMatch =
@@ -59,6 +69,8 @@ export type FlavorMatch =
   | { kind: 'near'; name: string; distance: number }
   /** Several equally close candidates: not safe to pick one without a judge. */
   | { kind: 'ambiguous'; names: string[]; distance: number }
+  /** Beyond the safe distance but within the wide one: worth asking about. */
+  | { kind: 'doubtful'; names: string[]; distance: number }
   | { kind: 'none' };
 
 /** Finds what `name` most likely is among `candidates` (already-accepted spellings). */
@@ -66,7 +78,8 @@ export function matchFlavor(name: string, candidates: readonly string[]): Flavor
   const key = normalizeFlavorName(name);
   if (!key) return { kind: 'none' };
 
-  let best: { name: string; distance: number }[] = [];
+  let near: { name: string; distance: number }[] = [];
+  let doubtful: { name: string; distance: number }[] = [];
   const seen = new Set<string>();
   for (const candidate of candidates) {
     const candidateKey = normalizeFlavorName(candidate);
@@ -75,14 +88,26 @@ export function matchFlavor(name: string, candidates: readonly string[]): Flavor
     if (candidateKey === key) return { kind: 'exact', name: candidate };
 
     const distance = damerauLevenshtein(key, candidateKey);
-    if (distance > maxTypoDistance(Math.min(key.length, candidateKey.length))) continue;
-    if (best.length === 0 || distance < best[0].distance) best = [{ name: candidate, distance }];
-    else if (distance === best[0].distance) best.push({ name: candidate, distance });
+    const shorter = Math.min(key.length, candidateKey.length);
+    if (distance <= maxTypoDistance(shorter)) {
+      if (near.length === 0 || distance < near[0].distance) near = [{ name: candidate, distance }];
+      else if (distance === near[0].distance) near.push({ name: candidate, distance });
+    } else if (distance <= maxDoubtfulDistance(shorter)) {
+      doubtful.push({ name: candidate, distance });
+    }
   }
 
-  if (best.length === 0) return { kind: 'none' };
-  if (best.length === 1) return { kind: 'near', ...best[0] };
-  return { kind: 'ambiguous', names: best.map((b) => b.name), distance: best[0].distance };
+  if (near.length === 1) return { kind: 'near', ...near[0] };
+  if (near.length > 1) return { kind: 'ambiguous', names: near.map((n) => n.name), distance: near[0].distance };
+  if (doubtful.length > 0) {
+    const closest = Math.min(...doubtful.map((d) => d.distance));
+    return {
+      kind: 'doubtful',
+      names: doubtful.filter((d) => d.distance === closest).map((d) => d.name),
+      distance: closest,
+    };
+  }
+  return { kind: 'none' };
 }
 
 export type ResolvedEntry = {
@@ -91,9 +116,8 @@ export type ResolvedEntry = {
   /** What was read off the picture, when it was corrected to another spelling. */
   originalName?: string;
   /**
-   * The match was a guess: close to several known flavours at once (left as
-   * read), or several edits away (already applied). A judge confirms or vetoes
-   * it with these candidates.
+   * Left as read, but close to these known flavours (several at once, or too
+   * many edits away to trust). A judge may rename it to one of them.
    */
   checkWith?: string[];
 };
@@ -125,13 +149,12 @@ export function resolveEntries(
         name: match.name,
         available: entry.available,
         ...(match.kind === 'near' || entry.name !== match.name ? { originalName: entry.name } : {}),
-        ...(match.kind === 'near' && match.distance >= 2 ? { checkWith: [match.name] } : {}),
       });
       continue;
     }
 
     const resolved: ResolvedEntry = { name: entry.name, available: entry.available };
-    if (match.kind === 'ambiguous') resolved.checkWith = match.names;
+    if (match.kind === 'ambiguous' || match.kind === 'doubtful') resolved.checkWith = match.names;
     result.push(resolved);
     spellings.push(entry.name);
   }

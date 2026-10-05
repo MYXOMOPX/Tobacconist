@@ -6,7 +6,12 @@ import {
   orderItems,
   vendorFlavorAvailability,
 } from '../db/schema.js';
-import { damerauLevenshtein, maxTypoDistance, normalizeFlavorName } from './flavorMatch.js';
+import {
+  damerauLevenshtein,
+  maxDoubtfulDistance,
+  maxTypoDistance,
+  normalizeFlavorName,
+} from './flavorMatch.js';
 
 export type FlavorRef = { id: number; name: string };
 
@@ -20,10 +25,16 @@ export type DuplicateGroup = {
 
 /**
  * Clusters a brand's flavours that look like one another: the same name once
- * normalised, or a typo apart. Transitive, so A~B and B~C land in one cluster.
+ * normalised, or a typo apart (`wide` widens that to what only a judge may
+ * confirm). Transitive, so A~B and B~C land in one cluster.
  * Returns only clusters of two or more, each as the list of its members.
  */
-export async function findDuplicateClusters(db: Db, brandId: number): Promise<FlavorRef[][]> {
+export async function findDuplicateClusters(
+  db: Db,
+  brandId: number,
+  opts: { wide?: boolean } = {}
+): Promise<FlavorRef[][]> {
+  const limit = opts.wide ? maxDoubtfulDistance : maxTypoDistance;
   const all = await db.select().from(flavors).where(eq(flavors.brandId, brandId)).all();
   const keys = all.map((flavor) => normalizeFlavorName(flavor.name));
 
@@ -35,7 +46,7 @@ export async function findDuplicateClusters(db: Db, brandId: number): Promise<Fl
       if (!keys[i] || !keys[j]) continue;
       const same =
         keys[i] === keys[j] ||
-        damerauLevenshtein(keys[i], keys[j]) <= maxTypoDistance(Math.min(keys[i].length, keys[j].length));
+        damerauLevenshtein(keys[i], keys[j]) <= limit(Math.min(keys[i].length, keys[j].length));
       if (same) parent[find(i)] = find(j);
     }
   }
