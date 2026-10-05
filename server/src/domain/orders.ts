@@ -1,6 +1,13 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { orders, orderPriceSnapshots, vendorBrandPrices } from '../db/schema.js';
+import {
+  deliveryChecklistItems,
+  orderItems,
+  orderParticipants,
+  orderPriceSnapshots,
+  orders,
+  vendorBrandPrices,
+} from '../db/schema.js';
 
 export type Order = typeof orders.$inferSelect;
 export type OrderStatus = Order['status'];
@@ -124,4 +131,28 @@ export async function getOrderPriceSnapshot(db: Db, orderId: number, brandId: nu
     .where(eq(orderPriceSnapshots.orderId, orderId))
     .all();
   return rows.find((row) => row.brandId === brandId)?.pricePerKgEur ?? null;
+}
+
+/**
+ * Erases finished orders for good, with everything that hangs off them: lines,
+ * participants, the delivery checklist and the frozen prices. Only `done` and
+ * `rejected` orders qualify — a live order is never deleted from here. Nothing
+ * is touched unless every id passes, so a stale list cannot half-delete.
+ */
+export async function deleteFinishedOrders(db: Db, orderIds: number[]) {
+  const ids = [...new Set(orderIds)];
+  if (ids.length === 0) return { deleted: 0 };
+
+  const rows = await db.select().from(orders).where(inArray(orders.id, ids)).all();
+  if (rows.length !== ids.length) throw new Error('some orders do not exist');
+  if (rows.some((row) => isActiveStatus(row.status))) {
+    throw new Error('only finished orders can be deleted');
+  }
+
+  await db.delete(orderItems).where(inArray(orderItems.orderId, ids)).run();
+  await db.delete(orderParticipants).where(inArray(orderParticipants.orderId, ids)).run();
+  await db.delete(deliveryChecklistItems).where(inArray(deliveryChecklistItems.orderId, ids)).run();
+  await db.delete(orderPriceSnapshots).where(inArray(orderPriceSnapshots.orderId, ids)).run();
+  await db.delete(orders).where(inArray(orders.id, ids)).run();
+  return { deleted: ids.length };
 }

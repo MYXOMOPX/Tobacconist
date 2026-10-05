@@ -8,12 +8,14 @@ import {
   Button,
   Card,
   CardHead,
+  ConfirmDialog,
   EmptyState,
   LedgerRow,
   ListSkeleton,
   Money,
   Row,
   StatusBadge,
+  Toggle,
   Weight,
   gramsLabel,
 } from '../ui';
@@ -41,6 +43,9 @@ export function HistoryPage({
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [selected, setSelected] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [cleaning, setCleaning] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [confirming, setConfirming] = useState(false);
   const { error, run } = useAction();
 
   useEffect(() => {
@@ -52,6 +57,27 @@ export function HistoryPage({
   function openOrder(id: number) {
     return run(async () => {
       setSelected(await api.get<OrderDetail>(`/history/${id}`));
+    });
+  }
+
+  function togglePicked(id: number) {
+    const next = new Set(picked);
+    if (!next.delete(id)) next.add(id);
+    setPicked(next);
+  }
+
+  function stopCleaning() {
+    setCleaning(false);
+    setPicked(new Set());
+    setConfirming(false);
+  }
+
+  function deletePicked() {
+    return run(async () => {
+      await api.post('/history/delete', { orderIds: [...picked] });
+      setOrders(orders.filter((order) => !picked.has(order.id)));
+      setSelected(null);
+      stopCleaning();
     });
   }
 
@@ -69,7 +95,36 @@ export function HistoryPage({
         />
       ) : (
         <div className="tb-stack">
-          {orders.map((order) => (
+          {isAdmin &&
+            (cleaning ? (
+              <>
+                <Button
+                  variant="destructive"
+                  block
+                  disabled={picked.size === 0}
+                  onClick={() => setConfirming(true)}
+                >
+                  Удалить выбранные ({picked.size})
+                </Button>
+                <Button block onClick={stopCleaning}>
+                  Отмена
+                </Button>
+              </>
+            ) : (
+              <Button block onClick={() => setCleaning(true)}>
+                Очистить историю
+              </Button>
+            ))}
+          {orders.map((order) =>
+            cleaning ? (
+              <Toggle
+                key={order.id}
+                label={`${order.vendorName} · ${new Date(order.statusChangedAt).toLocaleDateString('ru-RU')}`}
+                pressed={picked.has(order.id)}
+                onChange={() => togglePicked(order.id)}
+                trailing={<StatusBadge status={order.status} />}
+              />
+            ) : (
             <Card key={order.id}>
               <Row
                 label={order.vendorName}
@@ -83,9 +138,23 @@ export function HistoryPage({
                 </Button>
               )}
             </Card>
-          ))}
+            )
+          )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirming}
+        title={`Удалить заказов: ${picked.size}?`}
+        confirmLabel="Удалить навсегда"
+        onConfirm={deletePicked}
+        onCancel={() => setConfirming(false)}
+        body={
+          <p className="tb-subtitle">
+            Заказы удалятся целиком: состав, оплаты и чек-листы. Вернуть их нельзя.
+          </p>
+        }
+      />
 
       {selected && (
         <Card>

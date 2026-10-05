@@ -105,4 +105,31 @@ describe('HistoryPage', () => {
     render(<HistoryPage />);
     expect(await screen.findByRole('alert')).toHaveTextContent('round not found');
   });
+
+  it('lets the admin pick orders and delete them after a confirmation', async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' },
+      { id: 8, vendorId: 2, vendorName: 'Petya', status: 'rejected', createdAt: '', statusChangedAt: '2026-08-10T00:00:00.000Z' },
+    ]);
+    vi.mocked(api.post).mockResolvedValue({ deleted: 1 });
+
+    const user = userEvent.setup();
+    render(<HistoryPage isAdmin />);
+    await user.click(await screen.findByRole('button', { name: 'Очистить историю' }));
+    await user.click(screen.getByRole('button', { name: /Petya/ }));
+    await user.click(screen.getByRole('button', { name: 'Удалить выбранные (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Удалить навсегда' }));
+
+    expect(api.post).toHaveBeenCalledWith('/history/delete', { orderIds: [8] });
+    expect(screen.queryByText('Petya')).not.toBeInTheDocument();
+  });
+
+  it('offers no cleaning to a participant', async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      { id: 7, vendorId: 1, vendorName: 'Vasya', status: 'done', createdAt: '', statusChangedAt: '2026-08-01T00:00:00.000Z' },
+    ]);
+    render(<HistoryPage />);
+    await screen.findByText('Vasya');
+    expect(screen.queryByRole('button', { name: 'Очистить историю' })).not.toBeInTheDocument();
+  });
 });

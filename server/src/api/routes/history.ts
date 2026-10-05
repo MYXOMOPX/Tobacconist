@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { orderItems } from '../../db/schema.js';
-import { getOrder, isActiveStatus, listFinishedOrders } from '../../domain/orders.js';
+import { deleteFinishedOrders, getOrder, isActiveStatus, listFinishedOrders } from '../../domain/orders.js';
+import { requireAdmin } from '../middleware/authenticate.js';
 import { computeUserSummary } from '../../domain/summary.js';
 import { getPaymentStatus } from '../../domain/participants.js';
 import { toOrderDto } from './orders.js';
@@ -22,6 +23,24 @@ export function historyRoutes(db: Db) {
       const myOrderIds = new Set(myItems.map((item) => item.orderId));
       return dtos.filter((dto) => myOrderIds.has(dto.id));
     });
+
+    /** Admin only: wipes finished orders entirely. There is no undo. */
+    api.post<{ Body: { orderIds: number[] } }>(
+      '/delete',
+      { preHandler: requireAdmin },
+      async (req, reply) => {
+        const orderIds = req.body?.orderIds;
+        if (!Array.isArray(orderIds) || orderIds.length === 0 || !orderIds.every(Number.isInteger)) {
+          reply.code(400).send({ error: 'orderIds are required' });
+          return;
+        }
+        try {
+          return await deleteFinishedOrders(db, orderIds);
+        } catch (err) {
+          reply.code(400).send({ error: err instanceof Error ? err.message : 'delete failed' });
+        }
+      }
+    );
 
     api.get<{ Params: { orderId: string } }>('/:orderId', async (req, reply) => {
       const orderId = Number(req.params.orderId);

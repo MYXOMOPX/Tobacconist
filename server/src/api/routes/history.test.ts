@@ -119,4 +119,40 @@ describe('history routes', () => {
     const res = await app.inject({ method: 'GET', url: `/api/history/${active.id}` });
     expect(res.statusCode).toBe(404);
   });
+
+  it('POST /delete erases finished orders with their lines, for admin only', async () => {
+    const { db, orderA, orderB } = await seedTwoFinishedOrders();
+
+    const denied = await testApp(friend, db).inject({
+      method: 'POST',
+      url: '/api/history/delete',
+      payload: { orderIds: [orderA.id] },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const res = await testApp(admin, db).inject({
+      method: 'POST',
+      url: '/api/history/delete',
+      payload: { orderIds: [orderA.id] },
+    });
+    expect(res.json()).toEqual({ deleted: 1 });
+
+    const list = await testApp(admin, db).inject({ method: 'GET', url: '/api/history' });
+    expect(list.json().map((o: { id: number }) => o.id)).toEqual([orderB.id]);
+  });
+
+  it('POST /delete refuses a live order and deletes nothing', async () => {
+    const { db, orderA } = await seedTwoFinishedOrders();
+    const vendorId = orderA.vendorId;
+    const live = await createOrder(db, vendorId, admin.id);
+
+    const res = await testApp(admin, db).inject({
+      method: 'POST',
+      url: '/api/history/delete',
+      payload: { orderIds: [orderA.id, live.id] },
+    });
+    expect(res.statusCode).toBe(400);
+    const list = await testApp(admin, db).inject({ method: 'GET', url: '/api/history' });
+    expect(list.json()).toHaveLength(2);
+  });
 });
