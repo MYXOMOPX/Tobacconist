@@ -1,5 +1,5 @@
 import type { GeminiClient } from './client.js';
-import type { ResolvedEntry } from '../domain/flavorMatch.js';
+import { normalizeFlavorName, type ResolvedEntry } from '../domain/flavorMatch.js';
 
 const PROMPT = `You are checking flavor names of a tobacco brand for typos. A name was read from a vendor's screenshot and may contain an OCR mistake or the vendor's own typo. For each case decide whether it is the SAME flavor as one of the candidates (just misspelled) or a DIFFERENT flavor. Different flavors that merely look similar (e.g. "Mint" and "Mist") are NOT the same. Respond with ONLY JSON: {"answers": [{"id": number, "same": boolean, "name": string|null}]} where "name" is exactly one of the candidates when same is true, otherwise null.`;
 
@@ -52,8 +52,12 @@ export async function judgeDoubtfulEntries(
     const answer = answers.find((a) => a.id === id);
     if (!answer) return;
     const read = entry.originalName ?? entry.name;
-    if (answer.same && answer.name && entry.checkWith!.includes(answer.name)) {
-      out[index] = { ...out[index], name: answer.name, ...(answer.name !== read ? { originalName: read } : {}) };
+    // The model may echo a candidate in another case: find it, and use OUR spelling.
+    const chosen = answer.same && answer.name
+      ? entry.checkWith!.find((c) => normalizeFlavorName(c) === normalizeFlavorName(answer.name!))
+      : undefined;
+    if (chosen) {
+      out[index] = { ...out[index], name: chosen, ...(chosen !== read ? { originalName: read } : {}) };
     } else if (!answer.same) {
       const { originalName: _dropped, ...rest } = out[index];
       out[index] = { ...rest, name: read };
@@ -66,7 +70,7 @@ export async function judgeDoubtfulEntries(
 function mergeSameName(entries: ResolvedEntry[]): ResolvedEntry[] {
   const merged: ResolvedEntry[] = [];
   for (const entry of entries) {
-    const twin = merged.find((m) => m.name === entry.name);
+    const twin = merged.find((m) => normalizeFlavorName(m.name) === normalizeFlavorName(entry.name));
     if (twin) twin.available = twin.available || entry.available;
     else merged.push(entry);
   }

@@ -11,7 +11,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      // Fastify rejects a JSON content type on a request with no body at all.
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...authHeaders(),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

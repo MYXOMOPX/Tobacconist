@@ -47,4 +47,13 @@ describe('judgeDoubtfulEntries', () => {
     const out = await judgeDoubtfulEntries(client(new Error('503')), 'Brand', doubtful);
     expect(out[0]).toEqual({ name: 'FRUITALITY', available: true, originalName: 'FRUITTALLLITY' });
   });
+
+  it('accepts the model echoing a candidate in another case, and keeps our spelling', async () => {
+    const out = await judgeDoubtfulEntries(
+      client('{"answers":[{"id":0,"same":true,"name":"fruitality"}]}'),
+      'Brand',
+      doubtful
+    );
+    expect(out[0].name).toBe('FRUITALITY');
+  });
 });

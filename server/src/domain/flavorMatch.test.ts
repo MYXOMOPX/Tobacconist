@@ -77,6 +77,20 @@ describe('resolveEntries', () => {
     );
     expect(out).toEqual([{ name: 'FRUITALITY', available: true, originalName: 'FRUITALITLY' }]);
   });
+  it('treats a different case as the same name, not a typo', () => {
+    expect(resolveEntries([{ name: 'FRUItyX', available: true }], ['FruityX'])).toEqual([
+      { name: 'FruityX', available: true },
+    ]);
+    expect(
+      resolveEntries(
+        [
+          { name: 'FruityX', available: true },
+          { name: 'FRUItyX', available: false },
+        ],
+        []
+      )
+    ).toEqual([{ name: 'FruityX', available: true }]);
+  });
   it('merges exact duplicates, in stock if either is', () => {
     const out = resolveEntries(
       [

@@ -148,7 +148,8 @@ export function resolveEntries(
       result.push({
         name: match.name,
         available: entry.available,
-        ...(match.kind === 'near' || entry.name !== match.name ? { originalName: entry.name } : {}),
+        // A different case or punctuation is the same name, not a typo worth flagging.
+        ...(match.kind === 'near' ? { originalName: entry.name } : {}),
       });
       continue;
     }

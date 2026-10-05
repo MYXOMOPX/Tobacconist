@@ -1,4 +1,5 @@
 import type { Db } from '../db/client.js';
+import { normalizeFlavorName } from '../domain/flavorMatch.js';
 import type { GeminiClient } from './client.js';
 import {
   findDuplicateClusters,
@@ -64,9 +65,12 @@ export async function reviewDuplicates(
     const answer = answers.find((a) => a.id === id);
     // No answer for a case: take only what the safe distance already vouched for.
     if (!answer) return;
-    const keep = members.find((m) => m.name === answer.canonical);
+    // The model may echo a name in another case; names are compared the way the
+    // rest of the matching does, ignoring case and punctuation.
+    const sameKey = (a: string, b: string) => normalizeFlavorName(a) === normalizeFlavorName(b);
+    const keep = answer.canonical ? members.find((m) => sameKey(m.name, answer.canonical!)) : undefined;
     const duplicates = members.filter(
-      (m) => m !== keep && answer.same.includes(m.name)
+      (m) => m !== keep && answer.same.some((name) => sameKey(name, m.name))
     );
     if (keep && duplicates.length > 0) {
       result.push({ keep, duplicates, fuzzy: true });

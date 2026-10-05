@@ -123,7 +123,7 @@ describe('reviewDuplicates', () => {
     await add('FRUITALITY');
     const out = await reviewDuplicates(
       db,
-      textClient('{"answers":[{"id":0,"canonical":"FRUITALITY","same":["FRUITTALLLITY"]}]}'),
+      textClient('{"answers":[{"id":0,"canonical":"fruitality","same":["Fruittalllity"]}]}'),
       brand
     );
     expect(out.groups[0].keep.name).toBe('FRUITALITY');

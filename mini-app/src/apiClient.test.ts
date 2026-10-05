@@ -21,6 +21,16 @@ describe('api client', () => {
     expect(opts.headers['X-Telegram-Init-Data']).toBe('fake-init-data');
   });
 
+  it('sends a JSON content type only when there is a body', async () => {
+    (global.fetch as any).mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    await api.post('/no-body');
+    await api.post('/with-body', { a: 1 });
+    const [, bodyless] = (global.fetch as any).mock.calls[0];
+    const [, withBody] = (global.fetch as any).mock.calls[1];
+    expect(bodyless.headers['Content-Type']).toBeUndefined();
+    expect(withBody.headers['Content-Type']).toBe('application/json');
+  });
+
   it('throws with the server error message on failure', async () => {
     (global.fetch as any).mockResolvedValue({
       ok: false,
