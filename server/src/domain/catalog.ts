@@ -1,6 +1,18 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { weights, brands, flavors } from '../db/schema.js';
+import {
+  availabilityUploads,
+  brands,
+  deliveryChecklistItems,
+  flavors,
+  orderItems,
+  orders,
+  orderPriceSnapshots,
+  vendorBrandPrices,
+  vendorFlavorAvailability,
+  weights,
+} from '../db/schema.js';
+import { deleteOrders, isActiveStatus } from './orders.js';
 import { matchFlavor } from './flavorMatch.js';
 
 export function packPriceEur(pricePerKgEur: number, grams: number): number {
@@ -105,4 +117,66 @@ export async function findOrCreateBrand(db: Db, name: string) {
   const existing = await db.select().from(brands).where(eq(brands.name, trimmed)).get();
   if (existing) return existing;
   return createBrand(db, trimmed);
+}
+
+/**
+ * Every order that mentions the brand, in any way: a line, a delivery row or a
+ * frozen price. Deleting the brand has to take these with it.
+ */
+async function ordersOfBrand(db: Db, brandId: number) {
+  const ids = new Set<number>();
+  const collect = (rows: { orderId: number }[]) => rows.forEach((row) => ids.add(row.orderId));
+  collect(await db.select({ orderId: orderItems.orderId }).from(orderItems).where(eq(orderItems.brandId, brandId)).all());
+  collect(
+    await db
+      .select({ orderId: deliveryChecklistItems.orderId })
+      .from(deliveryChecklistItems)
+      .where(eq(deliveryChecklistItems.brandId, brandId))
+      .all()
+  );
+  collect(
+    await db
+      .select({ orderId: orderPriceSnapshots.orderId })
+      .from(orderPriceSnapshots)
+      .where(eq(orderPriceSnapshots.brandId, brandId))
+      .all()
+  );
+  return [...ids];
+}
+
+/** What deleting the brand would drag along, so the UI can warn before it happens. */
+export async function getBrandUsage(db: Db, brandId: number) {
+  const ids = await ordersOfBrand(db, brandId);
+  if (ids.length === 0) return { orders: 0, activeOrders: 0 };
+  const rows = await db.select().from(orders).where(inArray(orders.id, ids)).all();
+  return { orders: rows.length, activeOrders: rows.filter((row) => isActiveStatus(row.status)).length };
+}
+
+/**
+ * Deletes a brand with its flavours, stock and vendor prices. Orders that
+ * mention it are erased as well — but only when the caller says so (`withOrders`);
+ * otherwise the call refuses, so a stray request cannot wipe order history.
+ */
+export async function deleteBrand(db: Db, brandId: number, opts: { withOrders?: boolean } = {}) {
+  const brand = await db.select().from(brands).where(eq(brands.id, brandId)).get();
+  if (!brand) throw new Error('brand not found');
+
+  const orderIds = await ordersOfBrand(db, brandId);
+  if (orderIds.length > 0 && !opts.withOrders) {
+    throw new Error('this brand is used in orders');
+  }
+  await deleteOrders(db, orderIds);
+
+  const flavorIds = (await db.select({ id: flavors.id }).from(flavors).where(eq(flavors.brandId, brandId)).all()).map(
+    (row) => row.id
+  );
+  if (flavorIds.length > 0) {
+    await db.delete(vendorFlavorAvailability).where(inArray(vendorFlavorAvailability.flavorId, flavorIds)).run();
+  }
+  await db.delete(flavors).where(eq(flavors.brandId, brandId)).run();
+  await db.delete(vendorBrandPrices).where(eq(vendorBrandPrices.brandId, brandId)).run();
+  // An upload record only remembers what the screenshot claimed; it keeps no brand then.
+  await db.update(availabilityUploads).set({ brandId: null }).where(eq(availabilityUploads.brandId, brandId)).run();
+  await db.delete(brands).where(eq(brands.id, brandId)).run();
+  return { deletedOrders: orderIds.length };
 }

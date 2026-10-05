@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createTestDb } from '../db/client';
-import { packPriceEur, getWeights, createBrand, listBrands, findOrCreateFlavor, listFlavorsByBrand, matchBrandByName, findOrCreateBrand, importFlavorList } from './catalog';
+import { users } from '../db/schema';
+import { createVendor, setVendorBrandPrice } from './vendors';
+import { createOrder, getOrder } from './orders';
+import { upsertOrderItem } from './orderItems';
+import { replaceAvailability, listVendorAssortment } from './availability';
+import { packPriceEur, getWeights, createBrand, listBrands, findOrCreateFlavor, listFlavorsByBrand, matchBrandByName, findOrCreateBrand, importFlavorList, deleteBrand, getBrandUsage } from './catalog';
 
 describe('packPriceEur', () => {
   it('computes pack price from €/kg and grams', () => {
@@ -96,5 +101,45 @@ describe('flavour matching in the catalogue', () => {
     const brand = await createBrand(db, 'Test');
     const result = await importFlavorList(db, brand.id, ['Kashmir Lemon', 'Kashmir Lime', 'Pear Lemonade', 'Berry Lemonade'].join(String.fromCharCode(10)));
     expect(result.added).toHaveLength(4);
+  });
+
+  it('deletes a brand with its flavours, stock and prices', async () => {
+    const db = createTestDb();
+    const vendor = await createVendor(db, 'Vasya');
+    const brand = await createBrand(db, 'Gone');
+    const other = await createBrand(db, 'Stays');
+    await setVendorBrandPrice(db, vendor.id, brand.id, 20);
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+    await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'Mint', available: true }] });
+    await replaceAvailability(db, { vendorId: vendor.id, brandId: other.id, weightId: w250.id, entries: [{ name: 'Cola', available: true }] });
+
+    expect(await deleteBrand(db, brand.id)).toEqual({ deletedOrders: 0 });
+
+    expect((await listBrands(db)).map((b) => b.name)).toEqual(['Stays']);
+    expect((await listVendorAssortment(db, vendor.id)).map((r) => r.flavorName)).toEqual(['Cola']);
+  });
+
+  it('refuses a brand used in orders unless told to erase them, then erases them whole', async () => {
+    const db = createTestDb();
+    const [user] = await db
+      .insert(users)
+      .values({ telegramId: '2', displayName: 'Friend', role: 'member', firstSeenAt: new Date().toISOString() })
+      .returning()
+      .all();
+    const vendor = await createVendor(db, 'Vasya');
+    const brand = await createBrand(db, 'Gone');
+    await setVendorBrandPrice(db, vendor.id, brand.id, 20);
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+    const [{ flavorId }] = await replaceAvailability(db, { vendorId: vendor.id, brandId: brand.id, weightId: w250.id, entries: [{ name: 'Mint', available: true }] });
+    const order = await createOrder(db, vendor.id, user.id);
+    await upsertOrderItem(db, { orderId: order.id, userId: user.id, brandId: brand.id, flavorId, weightId: w250.id, quantity: 1 });
+
+    expect(await getBrandUsage(db, brand.id)).toEqual({ orders: 1, activeOrders: 1 });
+    await expect(deleteBrand(db, brand.id)).rejects.toThrow('used in orders');
+    expect((await listBrands(db)).length).toBe(1);
+
+    expect(await deleteBrand(db, brand.id, { withOrders: true })).toEqual({ deletedOrders: 1 });
+    expect(await listBrands(db)).toEqual([]);
+    expect(await getOrder(db, order.id)).toBeNull();
   });
 });

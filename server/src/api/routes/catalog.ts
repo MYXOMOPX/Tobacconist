@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../../db/client.js';
 import { requireAdmin } from '../middleware/authenticate.js';
-import { getWeights, createBrand, listBrands, listFlavorsByBrand, importFlavorList } from '../../domain/catalog.js';
+import { getWeights, createBrand, listBrands, listFlavorsByBrand, importFlavorList, deleteBrand, getBrandUsage } from '../../domain/catalog.js';
 import {
   createVendor,
   listVendors,
@@ -28,6 +28,26 @@ export function catalogRoutes(db: Db, geminiClient?: GeminiClient) {
       const brand = await createBrand(db, req.body.name);
       reply.code(201).send(brand);
     });
+
+    /** How many orders deleting this brand would take with it. */
+    api.get<{ Params: { brandId: string } }>('/brands/:brandId/usage', async (req) =>
+      getBrandUsage(db, Number(req.params.brandId))
+    );
+
+    /** `?withOrders=true` is the admin's confirmation that orders may go too. */
+    api.delete<{ Params: { brandId: string }; Querystring: { withOrders?: string } }>(
+      '/brands/:brandId',
+      async (req, reply) => {
+        try {
+          return await deleteBrand(db, Number(req.params.brandId), {
+            withOrders: req.query.withOrders === 'true',
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'delete failed';
+          reply.code(message === 'brand not found' ? 404 : 409).send({ error: message });
+        }
+      }
+    );
 
     api.get<{ Params: { brandId: string } }>('/brands/:brandId/flavors', async (req) => {
       const list = await listFlavorsByBrand(db, Number(req.params.brandId));

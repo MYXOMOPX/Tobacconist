@@ -55,6 +55,15 @@ describe('catalog routes', () => {
     expect(empty.statusCode).toBe(400);
   });
 
+  it('DELETE /brands/:id removes the brand, and 404s on an unknown one', async () => {
+    const { app } = testApp(admin);
+    const brand = (await app.inject({ method: 'POST', url: '/api/admin/brands', payload: { name: 'Gone' } })).json();
+    const res = await app.inject({ method: 'DELETE', url: `/api/admin/brands/${brand.id}` });
+    expect(res.json()).toEqual({ deletedOrders: 0 });
+    expect((await app.inject({ method: 'GET', url: '/api/admin/brands' })).json()).toEqual([]);
+    expect((await app.inject({ method: 'DELETE', url: '/api/admin/brands/99' })).statusCode).toBe(404);
+  });
+
   it('vendor + price flow: create vendor, set price, read it back', async () => {
     const { app } = testApp(admin);
     const vendorRes = await app.inject({ method: 'POST', url: '/api/admin/vendors', payload: { name: 'Vasya' } });

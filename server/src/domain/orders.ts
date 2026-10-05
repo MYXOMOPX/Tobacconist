@@ -148,7 +148,12 @@ export async function deleteFinishedOrders(db: Db, orderIds: number[]) {
   if (rows.some((row) => isActiveStatus(row.status))) {
     throw new Error('only finished orders can be deleted');
   }
+  return deleteOrders(db, ids);
+}
 
+/** The unconditional erase behind `deleteFinishedOrders`; callers vouch for the ids. */
+export async function deleteOrders(db: Db, ids: number[]) {
+  if (ids.length === 0) return { deleted: 0 };
   await db.delete(orderItems).where(inArray(orderItems.orderId, ids)).run();
   await db.delete(orderParticipants).where(inArray(orderParticipants.orderId, ids)).run();
   await db.delete(deliveryChecklistItems).where(inArray(deliveryChecklistItems.orderId, ids)).run();

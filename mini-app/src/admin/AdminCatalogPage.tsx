@@ -2,19 +2,21 @@ import { useEffect, useState } from 'react';
 import { api } from '../apiClient';
 import { useAction } from '../useAction';
 import type { Brand, DuplicateGroup, DuplicateReview, Flavor, FlavorImportResult, Vendor } from '../types';
-import { Banner, Button, Card, CardHead, EmptyState, ListSkeleton, Row, TextField, Toggle } from '../ui';
+import { Banner, Button, Card, CardHead, ConfirmDialog, EmptyState, ListSkeleton, Row, TextField, Toggle } from '../ui';
 
 /**
  * One brand's reference flavour list. Pasted one per line; screenshots are
  * later snapped to these spellings, so a typo on a photo lands on the real name.
  */
-function BrandFlavors({ brand }: { brand: Brand }) {
+function BrandFlavors({ brand, onDeleted }: { brand: Brand; onDeleted: () => void }) {
   const [flavors, setFlavors] = useState<Flavor[]>([]);
   const [text, setText] = useState('');
   const [report, setReport] = useState<string | null>(null);
   /** The merge preview; `chosen` holds the keep ids of the groups still ticked. */
   const [review, setReview] = useState<DuplicateGroup[] | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
+  /** Set once the usage is known: the dialog then says how many orders go along. */
+  const [deleting, setDeleting] = useState<{ orders: number; activeOrders: number } | null>(null);
   const { error, run } = useAction();
 
   const reload = async () => setFlavors(await api.get<Flavor[]>(`/admin/brands/${brand.id}/flavors`));
@@ -42,6 +44,21 @@ function BrandFlavors({ brand }: { brand: Brand }) {
       const result = await api.post<DuplicateReview>(`/admin/brands/${brand.id}/flavors/duplicates`);
       setReview(result.groups);
       setChosen(new Set(result.groups.map((group) => group.keep.id)));
+    });
+  }
+
+  function askDelete() {
+    return run(async () => {
+      setDeleting(await api.get<{ orders: number; activeOrders: number }>(`/admin/brands/${brand.id}/usage`));
+    });
+  }
+
+  function removeBrand() {
+    const withOrders = (deleting?.orders ?? 0) > 0;
+    return run(async () => {
+      await api.delete(`/admin/brands/${brand.id}${withOrders ? '?withOrders=true' : ''}`);
+      setDeleting(null);
+      onDeleted();
     });
   }
 
@@ -100,6 +117,30 @@ function BrandFlavors({ brand }: { brand: Brand }) {
           </Button>
         </>
       )}
+
+      <Button variant="destructive" onClick={askDelete}>
+        Удалить бренд
+      </Button>
+      <ConfirmDialog
+        open={deleting !== null}
+        title={deleting && deleting.orders > 0 ? 'Точно удаляем?' : `Удалить ${brand.name}?`}
+        confirmLabel="Удалить"
+        onConfirm={removeBrand}
+        onCancel={() => setDeleting(null)}
+        body={
+          deleting && deleting.orders > 0 ? (
+            <p className="tb-subtitle">
+              Есть заказы с брендом {brand.name}: {deleting.orders}
+              {deleting.activeOrders > 0 ? ` (из них идут сейчас: ${deleting.activeOrders})` : ''}. Они
+              тоже будут удалены целиком, вместе с составом и оплатами. Вернуть их нельзя.
+            </p>
+          ) : (
+            <p className="tb-subtitle">
+              Бренд, его список вкусов, наличие и цены у барыг удалятся. Заказов с ним не было.
+            </p>
+          )
+        }
+      />
     </div>
   );
 }
@@ -195,7 +236,15 @@ export function AdminCatalogPage({ onOpenVendor }: { onOpenVendor: (vendorId: nu
                 trailing={<span aria-hidden="true">{openBrandId === brand.id ? '⌃' : '›'}</span>}
                 onClick={() => setOpenBrandId(openBrandId === brand.id ? null : brand.id)}
               />
-              {openBrandId === brand.id && <BrandFlavors brand={brand} />}
+              {openBrandId === brand.id && (
+                <BrandFlavors
+                  brand={brand}
+                  onDeleted={() => {
+                    setOpenBrandId(null);
+                    run(reloadCatalog);
+                  }}
+                />
+              )}
             </div>
           ))}
         </div>

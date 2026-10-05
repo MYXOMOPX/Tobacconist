@@ -5,7 +5,7 @@ import { AdminCatalogPage } from './AdminCatalogPage';
 import { api } from '../apiClient';
 
 vi.mock('../apiClient', () => ({
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
   uploadAvailabilityImage: vi.fn(),
 }));
 
@@ -93,5 +93,42 @@ describe('AdminCatalogPage', () => {
     expect(api.post).toHaveBeenCalledWith('/admin/brands/1/flavors/merge', {
       merges: [{ keepId: 1, dropIds: [2] }],
     });
+  });
+
+  it('warns that orders go with a brand that has them, and deletes only after confirmation', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/admin/brands/1/usage') return { orders: 3, activeOrders: 1 };
+      if (path === '/admin/vendors') return vendors;
+      if (path === '/admin/brands') return brands;
+      return [];
+    });
+    vi.mocked(api.delete).mockResolvedValue({ deletedOrders: 3 });
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /DarkSide/ }));
+    await user.click(await screen.findByRole('button', { name: 'Удалить бренд' }));
+
+    expect(await screen.findByText(/Есть заказы с брендом DarkSide: 3/)).toBeInTheDocument();
+    expect(api.delete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Удалить' }));
+
+    expect(api.delete).toHaveBeenCalledWith('/admin/brands/1?withOrders=true');
+  });
+
+  it('deletes an unused brand without the orders flag', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path === '/admin/brands/1/usage') return { orders: 0, activeOrders: 0 };
+      if (path === '/admin/vendors') return vendors;
+      if (path === '/admin/brands') return brands;
+      return [];
+    });
+    vi.mocked(api.delete).mockResolvedValue({ deletedOrders: 0 });
+    render(<AdminCatalogPage onOpenVendor={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /DarkSide/ }));
+    await user.click(await screen.findByRole('button', { name: 'Удалить бренд' }));
+    await user.click(await screen.findByRole('button', { name: 'Удалить' }));
+
+    expect(api.delete).toHaveBeenCalledWith('/admin/brands/1');
   });
 });
