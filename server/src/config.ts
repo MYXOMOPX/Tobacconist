@@ -5,7 +5,6 @@ import { DEFAULT_AGY_MODEL } from './gemini/agyClient.js';
 export type Config = {
   botToken: string;
   adminTelegramId: string;
-  groupChatId: string;
   /** `api`: Google's API with a key. `agy`: the signed-in agy CLI, which has no key limits. */
   geminiBackend: 'api' | 'agy';
   geminiApiKey: string;
@@ -56,7 +55,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     botToken: requiredUnlessDev('BOT_TOKEN'),
     adminTelegramId: requiredUnlessDev('TELEGRAM_ADMIN_ID'),
-    groupChatId: requiredUnlessDev('TELEGRAM_GROUP_CHAT_ID'),
     geminiBackend,
     // The key is only needed for the API backend; agy brings its own sign-in.
     geminiApiKey: geminiBackend === 'api' ? requiredUnlessDev('GEMINI_API_KEY') : (env.GEMINI_API_KEY ?? ''),

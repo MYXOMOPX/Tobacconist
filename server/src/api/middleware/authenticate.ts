@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { users } from '../../db/schema.js';
 import { verifyInitData, checkGroupMembership, type ChatMemberApi } from '../../telegram/auth.js';
+import { listAllowedChatIds } from '../../telegram/allowedChats.js';
 
 export type AuthedUser = { id: number; telegramId: string; displayName: string; role: 'admin' | 'member' };
 
@@ -43,7 +44,6 @@ async function findOrCreateDevUser(db: Db, name: string, adminName: string) {
 export function createAuthenticate(deps: {
   db: Db;
   botToken: string;
-  groupChatId: string;
   adminTelegramId: string;
   chatMemberApi: ChatMemberApi;
   /** Present only when the server runs without Telegram (config `devNoTelegram`). */
@@ -78,11 +78,14 @@ export function createAuthenticate(deps: {
       return;
     }
 
-    const isMember = await checkGroupMembership(
-      deps.chatMemberApi,
-      deps.groupChatId,
-      Number(verified.telegramId)
-    );
+    const allowedChatIds = await listAllowedChatIds(deps.db);
+    let isMember = false;
+    for (const chatId of allowedChatIds) {
+      if (await checkGroupMembership(deps.chatMemberApi, chatId, Number(verified.telegramId))) {
+        isMember = true;
+        break;
+      }
+    }
     if (!isMember) {
       reply.code(403).send({ error: 'not a member of the group chat' });
       return;

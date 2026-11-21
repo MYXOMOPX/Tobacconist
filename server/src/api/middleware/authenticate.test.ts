@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import { createTestDb } from '../../db/client';
 import { createAuthenticate, requireAdmin } from './authenticate';
 import type { ChatMemberApi } from '../../telegram/auth';
+import { disallowChat } from '../../telegram/allowedChats';
+import { allowedChats } from '../../db/schema';
 
 const BOT_TOKEN = '123456:TEST-TOKEN';
 
@@ -23,13 +25,17 @@ function buildTestApp(opts: {
   memberStatus: string;
   adminTelegramId: string;
   dev?: { adminName: string };
+  allowedChatIds?: string[];
+  memberChats?: string[];
 }) {
   const db = createTestDb();
-  const chatMemberApi: ChatMemberApi = { getChatMember: async () => ({ status: opts.memberStatus }) };
+  for (const chatId of opts.allowedChatIds ?? ['-1001']) {
+    db.insert(allowedChats).values({ chatId, enabledAt: new Date().toISOString() }).run();
+  }
+  const chatMemberApi: ChatMemberApi = { getChatMember: async (chatId) => ({ status: opts.memberChats ? (opts.memberChats.includes(String(chatId)) ? 'member' : 'left') : opts.memberStatus }) };
   const authenticate = createAuthenticate({
     db,
     botToken: BOT_TOKEN,
-    groupChatId: '-1001',
     adminTelegramId: opts.adminTelegramId,
     chatMemberApi,
     dev: opts.dev,
@@ -37,7 +43,7 @@ function buildTestApp(opts: {
   const app = Fastify();
   app.get('/whoami', { preHandler: authenticate }, async (req) => req.authedUser);
   app.get('/admin-only', { preHandler: [authenticate, requireAdmin] }, async () => ({ ok: true }));
-  return app;
+  return Object.assign(app, { db });
 }
 
 function whoami(app: ReturnType<typeof buildTestApp>, devUser: string) {
@@ -45,6 +51,13 @@ function whoami(app: ReturnType<typeof buildTestApp>, devUser: string) {
 }
 
 describe('authenticate middleware', () => {
+  it('accepts membership in either allowed chat and denies access after the only matching chat is stopped', async () => {
+    const app = buildTestApp({ memberStatus: 'left', adminTelegramId: '999', allowedChatIds: ['-1001', '-1002'], memberChats: ['-1002'] });
+    const headers = { 'x-telegram-init-data': signedInitData(555) };
+    expect((await app.inject({ method: 'GET', url: '/whoami', headers })).statusCode).toBe(200);
+    await disallowChat(app.db, '-1002');
+    expect((await app.inject({ method: 'GET', url: '/whoami', headers })).statusCode).toBe(403);
+  });
   it('401s when the init-data header is missing', async () => {
     const app = buildTestApp({ memberStatus: 'member', adminTelegramId: '999' });
     const res = await app.inject({ method: 'GET', url: '/whoami' });

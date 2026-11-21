@@ -5,7 +5,6 @@ import type { Config } from './config';
 const config: Config = {
   botToken: '123456:TEST-TOKEN',
   adminTelegramId: '1',
-  groupChatId: '-1001',
   geminiBackend: 'api',
   geminiApiKey: 'fake-key',
   geminiModel: 'gemini-3.5-flash',

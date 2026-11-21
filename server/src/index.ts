@@ -9,6 +9,7 @@ import { createBot } from './telegram/bot.js';
 import { createLoggingOrderAnnouncer, createOrderAnnouncer } from './telegram/notify.js';
 import type { ChatMemberApi } from './telegram/auth.js';
 import { buildApp } from './api/app.js';
+import { listAllowedChatIds } from './telegram/allowedChats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,14 +34,13 @@ export function createServer(config: Config) {
         botToken: config.botToken,
         db,
         adminTelegramId: config.adminTelegramId,
-        groupChatId: config.groupChatId,
         miniAppLink: config.miniAppLink,
         botInfo: config.botInfo,
       });
   const orderAnnouncer = bot
     ? createOrderAnnouncer({
         sender: bot.api,
-        groupChatId: config.groupChatId,
+        chatIds: () => listAllowedChatIds(db),
         miniAppLink: config.miniAppLink,
       })
     : createLoggingOrderAnnouncer();
@@ -48,7 +48,6 @@ export function createServer(config: Config) {
   const app = buildApp({
     db,
     botToken: config.botToken,
-    groupChatId: config.groupChatId,
     adminTelegramId: config.adminTelegramId,
     chatMemberApi: bot ? bot.api : devChatMemberApi,
     geminiClient,

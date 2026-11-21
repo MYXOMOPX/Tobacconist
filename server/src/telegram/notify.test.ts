@@ -7,7 +7,7 @@ function announcer(miniAppLink = LINK) {
   const sender: MessageSender = { sendMessage: vi.fn().mockResolvedValue(undefined) };
   return {
     sender,
-    announcer: createOrderAnnouncer({ sender, groupChatId: '-1001', miniAppLink }),
+    announcer: createOrderAnnouncer({ sender, chatIds: async () => ['-1001'], miniAppLink }),
     lastCall: () =>
       vi.mocked(sender.sendMessage).mock.calls.at(-1) as [
         string,
@@ -18,6 +18,16 @@ function announcer(miniAppLink = LINK) {
 }
 
 describe('createOrderAnnouncer', () => {
+  it('posts to every currently allowed chat', async () => {
+    const sender: MessageSender = { sendMessage: vi.fn().mockResolvedValue(undefined) };
+    let chats = ['-1001', '-1002'];
+    const a = createOrderAnnouncer({ sender, chatIds: async () => chats, miniAppLink: LINK });
+    await a.announceOrderOpened('Vasya', 42);
+    expect(vi.mocked(sender.sendMessage).mock.calls.map(([id]) => id)).toEqual(['-1001', '-1002']);
+    chats = ['-1002'];
+    await a.announceStatusChanged('Vasya', 42, 'done');
+    expect(vi.mocked(sender.sendMessage).mock.calls.map(([id]) => id)).toEqual(['-1001', '-1002', '-1002']);
+  });
   /**
    * The regression this guards: a `web_app` button is only valid in a private
    * chat, so posting one to the group came back as 400 BUTTON_TYPE_INVALID.

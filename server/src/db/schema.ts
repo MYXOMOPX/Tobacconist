@@ -8,6 +8,11 @@ export const users = sqliteTable('users', {
   firstSeenAt: text('first_seen_at').notNull(),
 });
 
+export const allowedChats = sqliteTable('allowed_chats', {
+  chatId: text('chat_id').primaryKey(),
+  enabledAt: text('enabled_at').notNull(),
+});
+
 export const weights = sqliteTable('weights', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   grams: integer('grams').notNull().unique(),

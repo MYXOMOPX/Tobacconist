@@ -18,7 +18,6 @@ import type { OrderAnnouncer } from '../telegram/notify.js';
 export function buildApp(deps: {
   db: Db;
   botToken: string;
-  groupChatId: string;
   adminTelegramId: string;
   chatMemberApi: ChatMemberApi;
   geminiClient: GeminiClient;
@@ -58,7 +57,6 @@ export function buildApp(deps: {
   const authenticate = createAuthenticate({
     db: deps.db,
     botToken: deps.botToken,
-    groupChatId: deps.groupChatId,
     adminTelegramId: deps.adminTelegramId,
     chatMemberApi: deps.chatMemberApi,
     dev: deps.dev,

@@ -14,7 +14,6 @@ describe('buildApp', () => {
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
-      groupChatId: '-1001',
       adminTelegramId: '1',
       chatMemberApi,
       geminiClient,
@@ -33,7 +32,6 @@ describe('buildApp', () => {
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
-      groupChatId: '-1001',
       adminTelegramId: '1',
       chatMemberApi,
       geminiClient,
@@ -62,7 +60,6 @@ describe('buildApp', () => {
     const app = buildApp({
       db: createTestDb(),
       botToken: 'x',
-      groupChatId: '-1001',
       adminTelegramId: '1',
       chatMemberApi,
       geminiClient,

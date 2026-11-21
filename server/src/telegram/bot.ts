@@ -6,19 +6,37 @@ import { users } from '../db/schema.js';
 import { listVendors } from '../domain/vendors.js';
 import { createOrder, type Order } from '../domain/orders.js';
 import { createOrderAnnouncer } from './notify.js';
+import { allowChat, disallowChat, isChatAllowed, listAllowedChatIds } from './allowedChats.js';
 
 export interface StartOrderCtx {
   from?: { id: number };
-  chat?: { id: number | string };
+  chat?: { id: number | string; type?: string };
   reply(text: string, opts?: unknown): Promise<unknown>;
+}
+
+export async function handleChatAccessCommand(
+  ctx: StartOrderCtx,
+  deps: { db: Db; adminTelegramId: string },
+  command: 'start' | 'stop'
+) {
+  if (!ctx.from || String(ctx.from.id) !== deps.adminTelegramId) return;
+  if (!ctx.chat || !['group', 'supergroup'].includes(ctx.chat.type ?? '')) return;
+  const chatId = String(ctx.chat.id);
+  if (command === 'start') {
+    await allowChat(deps.db, chatId);
+    await ctx.reply('Бот включён в этом чате.');
+  } else {
+    await disallowChat(deps.db, chatId);
+    await ctx.reply('Бот выключен в этом чате.');
+  }
 }
 
 export async function handleStartOrderCommand(
   ctx: StartOrderCtx,
-  deps: { db: Db; adminTelegramId: string; groupChatId: string }
+  deps: { db: Db; adminTelegramId: string }
 ) {
   if (!ctx.from || String(ctx.from.id) !== deps.adminTelegramId) return;
-  if (!ctx.chat || String(ctx.chat.id) !== deps.groupChatId) return;
+  if (!ctx.chat || !(await isChatAllowed(deps.db, String(ctx.chat.id)))) return;
 
   const vendors = await listVendors(deps.db);
   if (vendors.length === 0) {
@@ -35,6 +53,7 @@ export async function handleStartOrderCommand(
 
 export interface StartOrderCallbackCtx {
   from?: { id: number };
+  chat?: { id: number | string };
   callbackQuery?: { data?: string };
   answerCallbackQuery(): Promise<unknown>;
   editMessageText(text: string): Promise<unknown>;
@@ -64,11 +83,12 @@ async function ensureAdminUser(db: Db, adminTelegramId: string) {
 
 export async function handleStartOrderCallback(
   ctx: StartOrderCallbackCtx,
-  deps: { db: Db; adminTelegramId: string; groupChatId: string; miniAppLink: string }
+  deps: { db: Db; adminTelegramId: string; miniAppLink: string }
 ): Promise<Order | undefined> {
   await ctx.answerCallbackQuery();
 
   if (!ctx.from || String(ctx.from.id) !== deps.adminTelegramId) return undefined;
+  if (!ctx.chat || !(await isChatAllowed(deps.db, String(ctx.chat.id)))) return undefined;
   const match = ctx.callbackQuery?.data?.match(/^start_order:(\d+)$/);
   if (!match) return undefined;
 
@@ -80,11 +100,15 @@ export async function handleStartOrderCallback(
     const vendor = (await listVendors(deps.db, { includeArchived: true })).find((v) => v.id === vendorId);
 
     await ctx.editMessageText('Заказ открыт ✅');
-    await createOrderAnnouncer({
-      sender: ctx.api,
-      groupChatId: deps.groupChatId,
-      miniAppLink: deps.miniAppLink,
-    }).announceOrderOpened(vendor?.name ?? '', order.id);
+    try {
+      await createOrderAnnouncer({
+        sender: ctx.api,
+        chatIds: () => listAllowedChatIds(deps.db),
+        miniAppLink: deps.miniAppLink,
+      }).announceOrderOpened(vendor?.name ?? '', order.id);
+    } catch (err) {
+      console.error('order announcement failed', err);
+    }
 
     return order;
   } catch (err) {
@@ -98,11 +122,12 @@ export function createBot(deps: {
   botToken: string;
   db: Db;
   adminTelegramId: string;
-  groupChatId: string;
   miniAppLink: string;
   botInfo?: UserFromGetMe;
 }): Bot {
   const bot = new Bot(deps.botToken, deps.botInfo ? { botInfo: deps.botInfo } : undefined);
+  bot.command('start', (ctx) => handleChatAccessCommand(ctx as unknown as StartOrderCtx, deps, 'start'));
+  bot.command('stop', (ctx) => handleChatAccessCommand(ctx as unknown as StartOrderCtx, deps, 'stop'));
   bot.command('start_order', (ctx) => handleStartOrderCommand(ctx as unknown as StartOrderCtx, deps));
   bot.callbackQuery(/^start_order:\d+$/, (ctx) =>
     handleStartOrderCallback(ctx as unknown as StartOrderCallbackCtx, deps)

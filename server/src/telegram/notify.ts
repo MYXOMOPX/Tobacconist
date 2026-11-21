@@ -87,7 +87,7 @@ function readinessNotice(change: ReadinessChange): string {
  */
 export function createOrderAnnouncer(deps: {
   sender: MessageSender;
-  groupChatId: string;
+  chatIds: () => Promise<string[]>;
   /** BotFather's direct link to the Mini App; empty means "post without a button". */
   miniAppLink: string;
 }): OrderAnnouncer {
@@ -109,7 +109,8 @@ export function createOrderAnnouncer(deps: {
   }
 
   async function post(text: string, orderId: number) {
-    await deps.sender.sendMessage(deps.groupChatId, text, launchButton(orderId));
+    const chatIds = await deps.chatIds();
+    await Promise.all(chatIds.map((chatId) => deps.sender.sendMessage(chatId, text, launchButton(orderId))));
   }
 
   return {

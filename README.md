@@ -18,7 +18,7 @@ Telegram Mini App + бот для организации групповых за
 
 1. **Telegram-бот**: создать через [@BotFather](https://t.me/BotFather), получить токен вида `123456:AAAA...`.
 2. **Telegram id администратора**: узнать свой числовой id (например через [@userinfobot](https://t.me/userinfobot)).
-3. **Id группового чата**: добавить бота в чат друзей, узнать id чата (отрицательное число вида `-1001234567890`) — например через [@RawDataBot](https://t.me/RawDataBot) или логи бота после первого сообщения в группе.
+3. **Групповые чаты**: добавить бота в нужные чаты. Администратор с `TELEGRAM_ADMIN_ID` пишет `/start` в каждом чате, где бот должен работать.
 4. **Gemini API key**: получить на [Google AI Studio](https://aistudio.google.com/apikey).
 5. **Публичный HTTPS-домен**, под которым будет жить бэкенд (нужен боту для режима webhook и для Mini App — Telegram требует HTTPS).
 
@@ -34,7 +34,6 @@ npm install
 |---|---|---|
 | `BOT_TOKEN` | да | токен бота от BotFather |
 | `TELEGRAM_ADMIN_ID` | да | Telegram id администратора |
-| `TELEGRAM_GROUP_CHAT_ID` | да | id группового чата |
 | `GEMINI_BACKEND` | нет, по умолчанию `api` | `api` — Gemini API по ключу; `agy` — локально установленный и залогиненный CLI agy, у него нет лимитов ключа. agy должен стоять на той машине, где запущен сервер (в Docker-образе его нет — для agy запускай сервер на хосте) |
 | `GEMINI_API_KEY` | да при `GEMINI_BACKEND=api` | API-ключ Gemini |
 | `GEMINI_MODEL` | нет, по умолчанию `gemini-3.5-flash` (для agy — `gemini-3.6-flash-medium`) | id модели. Для agy это id из `agy models` (например `gemini-3.8-flash-high`). Google выводит старые id из обращения — тогда меняется здесь, без релиза кода |
@@ -46,6 +45,10 @@ npm install
 | `PORT` | нет, по умолчанию `3000` | порт HTTP-сервера |
 | `DEV_NO_TELEGRAM` | нет | `true` — запуск без Telegram, см. ниже. **Только для локалки** |
 | `DEV_ADMIN_NAME` | нет | при `DEV_NO_TELEGRAM=true` — имя, которое получает роль админа. Пусто: админом становится тот, кто зашёл первым |
+
+Администратор, указанный в `TELEGRAM_ADMIN_ID`, включает бота командой `/start` в каждом нужном групповом чате и выключает командой `/stop` в этом чате. Список активных чатов хранится в SQLite и сохраняется после перезапуска. Член любого активного чата может открыть Mini App; каталог и заказы сейчас общие для всех активных чатов. Уведомления об общих заказах отправляются во все активные чаты.
+
+При обновлении существующей установки список чатов сначала пустой. После запуска новой версии администратор должен отправить `/start` в прежний чат: до этого Mini App не пропустит участников, а уведомления не будут отправляться. `TELEGRAM_GROUP_CHAT_ID` можно удалить из старого `.env`.
 
 ### Кнопка «Открыть заказ» в групповом чате
 
@@ -112,7 +115,7 @@ cd mini-app && npx tsc -p tsconfig.json --noEmit
 
    | Переменная | Назначение |
    |---|---|
-   | `BOT_TOKEN`, `TELEGRAM_ADMIN_ID`, `TELEGRAM_GROUP_CHAT_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL` | см. таблицу выше |
+   | `BOT_TOKEN`, `TELEGRAM_ADMIN_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL` | см. таблицу выше |
    | `PUBLIC_URL` | полный HTTPS-адрес, например `https://tobacconist.example.com` |
    | `TELEGRAM_MINIAPP_LINK` | прямая ссылка на Mini App из BotFather, например `https://t.me/tobacconist_bot/order` |
    | `PUBLIC_HOST` | тот же домен без схемы — используется в Traefik-лейбле для `Host()`-правила |
