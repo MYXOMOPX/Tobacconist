@@ -21,6 +21,7 @@ import {
 } from '../ui';
 import { ChecklistPage } from './ChecklistPage';
 import { ParticipantCartPage } from './ParticipantCartPage';
+import { OrderTablesPage } from './OrderTablesPage';
 
 type Allocations = Record<number, number>;
 
@@ -55,6 +56,7 @@ export function AdminOrderPage({
   const [distributing, setDistributing] = useState(false);
   const [checking, setChecking] = useState(false);
   const [cartUserId, setCartUserId] = useState<number | null>(null);
+  const [showTables, setShowTables] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [loading, setLoading] = useState(true);
   const { error, run } = useAction();
@@ -149,6 +151,16 @@ export function AdminOrderPage({
           // Whatever changed inside the cart — quantities, payment — has to show up here too.
           run(reload);
         }}
+      />
+    );
+  }
+
+  if (showTables) {
+    return (
+      <OrderTablesPage
+        vendorName={order.vendorName}
+        participants={participants}
+        onBack={() => setShowTables(false)}
       />
     );
   }
@@ -303,6 +315,8 @@ export function AdminOrderPage({
           </>
         )}
       </Card>
+
+      <Button block onClick={() => setShowTables(true)}>Таблица заказов</Button>
 
       {snapshot && (
         <Card>

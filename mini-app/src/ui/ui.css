@@ -102,6 +102,64 @@
   line-height: 1.3;
 }
 
+/* Participant order tables keep all three columns visible on a narrow phone. */
+.tb-order-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--tb-size-small);
+  line-height: 1.35;
+}
+
+.tb-order-table__product-col { width: 57%; }
+.tb-order-table__qty-col { width: 15%; }
+.tb-order-table__price-col { width: 28%; }
+
+.tb-order-table th,
+.tb-order-table td {
+  padding: var(--tb-space-sm) 2px;
+  border-bottom: 1px solid var(--tb-border);
+  vertical-align: top;
+}
+
+.tb-order-table th:first-child,
+.tb-order-table td:first-child { padding-left: 0; }
+
+.tb-order-table th:last-child,
+.tb-order-table td:last-child { padding-right: 0; }
+
+.tb-order-table thead th {
+  color: var(--tb-text-muted);
+  font-weight: 600;
+  text-align: right;
+}
+
+.tb-order-table thead th:first-child,
+.tb-order-table tfoot th { text-align: left; }
+
+.tb-order-table__product {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.tb-order-table__weight {
+  display: block;
+  color: var(--tb-text-muted);
+}
+
+.tb-order-table__number {
+  font-family: var(--tb-font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.tb-order-table tfoot th,
+.tb-order-table tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+
 /* ---------- Ledger row: the receipt line ---------- */
 /* Name on the left, figures on the right, a dotted rail carrying the eye
    across — the same shape as the printout the admin sends the vendor. */

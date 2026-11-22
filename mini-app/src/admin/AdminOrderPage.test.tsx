@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminOrderPage } from './AdminOrderPage';
 import { api } from '../apiClient';
@@ -52,7 +52,7 @@ const discrepancy = {
 function mockApi(status: string, extra: Record<string, unknown> = {}) {
   vi.mocked(api.get).mockImplementation(async (path: string) => {
     if (path === '/orders/5') return order(status);
-    if (path === '/orders/5/summaries') return summaries;
+    if (path === '/orders/5/summaries') return extra.summaries ?? summaries;
     if (path === '/orders/5/snapshot') return snapshot;
     if (path === '/orders/5/checklist') return checklist;
     if (path === '/orders/5/discrepancies') return extra.discrepancies ?? [];
@@ -62,6 +62,44 @@ function mockApi(status: string, extra: Record<string, unknown> = {}) {
 }
 
 describe('AdminOrderPage — collecting', () => {
+  it('opens a separate compact table for every participant and returns to management', async () => {
+    mockApi('ordering', { summaries: [
+      { userId: 2, displayName: 'Александр', totalEur: 150, items: [
+        { brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 3, deliveredQty: null, totalEur: 150, available: true },
+      ], paid: false, ready: true, totalKg: 0.75 },
+      { userId: 3, displayName: 'Андрей', totalEur: 12, items: [
+        { brandId: 2, brandName: 'Musthave', flavorId: 2, flavorName: 'Alova', weightId: 2, grams: 120, quantity: 2, deliveredQty: null, totalEur: 12, available: true },
+      ], paid: false, ready: false, totalKg: 0.24 },
+    ] });
+    const user = userEvent.setup();
+    render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Таблица заказов' }));
+
+    expect(screen.getByRole('heading', { name: 'Таблица заказов' })).toBeInTheDocument();
+    const tables = screen.getAllByRole('table');
+    expect(tables).toHaveLength(2);
+    expect(within(tables[0]).getByText('DarkSide CyberKiwi')).toBeInTheDocument();
+    expect(within(tables[0]).getByText('250г')).toBeInTheDocument();
+    expect(within(tables[0]).getAllByText('150.00')).toHaveLength(2);
+    expect(within(tables[1]).getByText('Musthave Alova')).toBeInTheDocument();
+    expect(within(tables[1]).getByText('120г')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '← К управлению заказом' }));
+    expect(screen.getByRole('heading', { name: 'Участники' })).toBeInTheDocument();
+  });
+
+  it('uses delivered quantities when the order has been reconciled', async () => {
+    mockApi('done', { summaries: [{
+      userId: 2, displayName: 'Александр', totalEur: 5, totalKg: 0.25, paid: false, ready: true,
+      items: [{ brandId: 1, brandName: 'DarkSide', flavorId: 1, flavorName: 'CyberKiwi', weightId: 1, grams: 250, quantity: 2, deliveredQty: 1, totalEur: 5, available: true }],
+    }] });
+    const user = userEvent.setup();
+    render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Таблица заказов' }));
+    const row = screen.getByRole('row', { name: /DarkSide CyberKiwi/ });
+    expect(within(row).getByText('1')).toBeInTheDocument();
+    expect(within(row).getByText('5.00')).toBeInTheDocument();
+  });
+
   it('shows who is ready and how much money is in', async () => {
     mockApi('ordering');
     render(<AdminOrderPage orderId={5} onBack={vi.fn()} />);
