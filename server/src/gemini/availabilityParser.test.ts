@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { GeminiClient } from './client';
 import { parseAvailabilityImage } from './availabilityParser';
 
@@ -73,8 +73,21 @@ describe('parseAvailabilityImage', () => {
   });
 
   it('throws a descriptive error on an unparseable response', async () => {
-    const client = mockClient('sorry, I cannot help with that');
+    const client = { generateFromImage: vi.fn().mockResolvedValue('sorry, I cannot help with that') };
     await expect(parseAvailabilityImage(client, image)).rejects.toThrow('not valid JSON');
+    expect(client.generateFromImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries once when the first agy response is not JSON', async () => {
+    const client = {
+      generateFromImage: vi.fn()
+        .mockResolvedValueOnce('I found the flavors, but the response is incomplete')
+        .mockResolvedValueOnce('{"brand":"MUSTHAVE","grams":250,"flavors":[{"name":"Alova","available":true}]}'),
+    };
+    expect(await parseAvailabilityImage(client, image)).toEqual({
+      brand: 'MUSTHAVE', grams: 250, flavors: [{ name: 'Alova', available: true }],
+    });
+    expect(client.generateFromImage).toHaveBeenCalledTimes(2);
   });
 
   it('rejects the old array-shaped response instead of silently reading nothing', async () => {

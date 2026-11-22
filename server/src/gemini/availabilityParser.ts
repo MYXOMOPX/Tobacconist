@@ -28,17 +28,19 @@ export async function parseAvailabilityImage(
   client: GeminiClient,
   params: { imageBase64: string; mimeType: string }
 ): Promise<ParsedAvailability> {
-  const raw = await client.generateFromImage({
-    imageBase64: params.imageBase64,
-    mimeType: params.mimeType,
-    prompt: PROMPT,
-  });
-
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(extractJson(raw));
-  } catch {
-    fail('not valid JSON');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const raw = await client.generateFromImage({
+      imageBase64: params.imageBase64,
+      mimeType: params.mimeType,
+      prompt: attempt === 0 ? PROMPT : `${PROMPT}\nYour previous reply could not be parsed as JSON. Return only the JSON object, with no explanation.`,
+    });
+    try {
+      parsed = JSON.parse(extractJson(raw));
+      break;
+    } catch {
+      if (attempt === 1) fail('not valid JSON');
+    }
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
