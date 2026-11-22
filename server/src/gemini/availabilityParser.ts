@@ -88,15 +88,24 @@ export async function parseAvailabilityImage(
     }
   }
 
+  try {
+    return normalizeAvailabilityData(parsed);
+  } catch (err) {
+    fail(err instanceof Error ? err.message : 'invalid response shape');
+  }
+}
+
+/** Apply the same shape checks and cleanup to model output and pasted JSON. */
+export function normalizeAvailabilityData(parsed: unknown): ParsedAvailability {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    fail('expected a JSON object');
+    throw new Error('expected a JSON object');
   }
 
   const { brand, grams, flavors } = parsed as Record<string, unknown>;
 
-  if (brand !== null && brand !== undefined && typeof brand !== 'string') fail('brand must be a string or null');
-  if (grams !== null && grams !== undefined && typeof grams !== 'number') fail('grams must be a number or null');
-  if (!Array.isArray(flavors)) fail('flavors must be an array');
+  if (brand !== null && brand !== undefined && typeof brand !== 'string') throw new Error('brand must be a string or null');
+  if (grams !== null && grams !== undefined && typeof grams !== 'number') throw new Error('grams must be a number or null');
+  if (!Array.isArray(flavors)) throw new Error('flavors must be an array');
 
   const entries = flavors.map((item) => {
     if (
@@ -105,7 +114,7 @@ export async function parseAvailabilityImage(
       typeof (item as { name?: unknown }).name !== 'string' ||
       typeof (item as { available?: unknown }).available !== 'boolean'
     ) {
-      fail('entry missing name/available fields');
+      throw new Error('entry missing name/available fields');
     }
     const entry = item as { name: string; available: boolean };
     return { name: entry.name.trim(), available: entry.available };

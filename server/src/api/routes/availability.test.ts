@@ -259,6 +259,71 @@ describe('POST /parse', () => {
   });
 });
 
+describe('POST /import-json', () => {
+  it('validates and deduplicates pasted stock through the screenshot review pipeline', async () => {
+    const { app, db } = testApp(admin, '{}');
+    const vendor = await createVendor(db, 'Vasya');
+    const brand = await createBrand(db, 'DarkSide');
+    await findOrCreateFlavor(db, brand.id, 'CyberKiwi');
+    const w250 = (await getWeights(db)).find((w) => w.grams === 250)!;
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/admin/availability/import-json',
+      payload: { vendorId: vendor.id, data: {
+        brand: 'DarkSide', grams: 250,
+        flavors: [
+          { name: 'CyberKiwl', available: false },
+          { name: 'CyberKiwi', available: true },
+          { name: 'Mango', available: false },
+          { name: 'MANGO', available: true },
+        ],
+      } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      detectedBrandName: 'DarkSide', brandId: brand.id, detectedGrams: 250, weightId: w250.id,
+      entries: [
+        { name: 'CyberKiwi', available: true, originalName: 'CyberKiwl' },
+        { name: 'Mango', available: true },
+      ],
+    });
+    expect(await fs.readdir(uploadsDir)).toHaveLength(0);
+  });
+
+  it('rejects malformed pasted stock before it reaches review', async () => {
+    const { app, db } = testApp(admin, '{}');
+    const vendor = await createVendor(db, 'Vasya');
+    const res = await app.inject({
+      method: 'POST', url: '/api/admin/availability/import-json',
+      payload: { vendorId: vendor.id, data: { brand: 'DarkSide', grams: 250, flavors: [{ name: 'Mango', available: 'yes' }] } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('available');
+    expect(res.json().error).not.toContain('Модель');
+  });
+
+  it('requires all schema fields in pasted stock', async () => {
+    const { app, db } = testApp(admin, '{}');
+    const vendor = await createVendor(db, 'Vasya');
+    const res = await app.inject({
+      method: 'POST', url: '/api/admin/availability/import-json',
+      payload: { vendorId: vendor.id, data: { brand: 'DarkSide', flavors: [{ name: 'Mango', available: true }] } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('grams');
+  });
+
+  it('requires admin access', async () => {
+    const { app } = testApp(member, '{}');
+    const res = await app.inject({
+      method: 'POST', url: '/api/admin/availability/import-json',
+      payload: { vendorId: 1, data: { brand: 'DarkSide', grams: 250, flavors: [] } },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe('POST /confirm', () => {
   it('saves several screenshots as one batch', async () => {
     const { app, db } = testApp(admin, '{}');

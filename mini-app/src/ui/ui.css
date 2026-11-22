@@ -708,6 +708,34 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.tb-sheet--fullscreen {
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  padding-top: calc(var(--tb-space-lg) + env(safe-area-inset-top));
+}
+
+.tb-json-input {
+  width: 100%;
+  min-height: 35vh;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.tb-json-schema {
+  margin: 0;
+  max-height: 25vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: var(--tb-space-md);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-surface);
+  color: var(--tb-text);
+  font-size: var(--tb-size-small);
+}
+
 /* The grab handle and the title stay put while the list under them scrolls. */
 .tb-sheet__handle,
 .tb-sheet__title {

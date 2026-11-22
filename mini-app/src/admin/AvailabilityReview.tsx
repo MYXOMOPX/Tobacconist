@@ -10,10 +10,35 @@ import {
   CardHead,
   EmptyState,
   Select,
+  Sheet,
   TextField,
   Toggle,
   gramsLabel,
 } from '../ui';
+
+const AVAILABILITY_SCHEMA = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  title: 'Наличие с одного скрина или списка',
+  description: 'Верни только один JSON-объект без Markdown для одного бренда и одной граммовки. Если на скринах несколько групп, дай отдельные ответы для вставки по одному. Зачёркнутые или явно отсутствующие вкусы пометь available: false. Не придумывай нечитаемые названия.',
+  type: 'object',
+  required: ['brand', 'grams', 'flavors'],
+  additionalProperties: false,
+  properties: {
+    brand: { type: ['string', 'null'], description: 'Название бренда как на скрине; null, если не видно.' },
+    grams: { type: ['integer', 'null'], description: 'Граммовка числом без единиц; null, если не видно.' },
+    flavors: {
+      type: 'array', minItems: 1,
+      items: {
+        type: 'object', required: ['name', 'available'], additionalProperties: false,
+        properties: {
+          name: { type: 'string', description: 'Название вкуса.' },
+          available: { type: 'boolean', description: 'true — есть в наличии; false — зачёркнут или явно отсутствует.' },
+        },
+      },
+    },
+  },
+  examples: [{ brand: 'Musthave', grams: 250, flavors: [{ name: 'Alova', available: true }, { name: 'Mango', available: false }] }],
+}, null, 2);
 
 /** One screenshot after parsing, with whatever the admin has corrected on top. */
 type Group = {
@@ -82,6 +107,11 @@ export function AvailabilityReview({
   const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
   const [wipeOthers, setWipeOthers] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [jsonBusy, setJsonBusy] = useState(false);
+  const [schemaCopied, setSchemaCopied] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const { error, run } = useAction();
 
@@ -127,6 +157,39 @@ export function AvailabilityReview({
     });
   }
 
+  async function importJson() {
+    let data: unknown;
+    try {
+      data = JSON.parse(jsonText);
+    } catch {
+      setJsonError('Некорректный JSON');
+      return;
+    }
+    setJsonBusy(true);
+    setJsonError('');
+    try {
+      const parsed = await api.post<ParsedScreenshot>('/admin/availability/import-json', {
+        vendorId, data, sessionNames: sessionNames(),
+      });
+      setGroups((current) => merge(current, parsed, 'JSON'));
+      setJsonText('');
+      setJsonOpen(false);
+    } catch (err) {
+      setJsonError(err instanceof Error ? err.message : 'Не удалось проверить JSON');
+    } finally {
+      setJsonBusy(false);
+    }
+  }
+
+  async function copySchema() {
+    try {
+      await navigator.clipboard.writeText(AVAILABILITY_SCHEMA);
+      setSchemaCopied(true);
+    } catch {
+      setJsonError('Не удалось скопировать. Выдели схему ниже вручную.');
+    }
+  }
+
   /** A long list often spans several screenshots, so the same brand+weight unions. */
   function merge(current: Group[], parsed: ParsedScreenshot, fileName: string): Group[] {
     const twin =
@@ -138,7 +201,11 @@ export function AvailabilityReview({
 
     if (twin) {
       const byName = new Map(twin.entries.map((entry) => [entry.name.toLowerCase(), entry]));
-      for (const entry of parsed.entries) byName.set(entry.name.toLowerCase(), entry);
+      for (const entry of parsed.entries) {
+        const key = entry.name.toLowerCase();
+        const previous = byName.get(key);
+        byName.set(key, previous ? { ...previous, available: previous.available || entry.available } : entry);
+      }
       return current.map((group) =>
         group.key === twin.key
           ? { ...group, entries: [...byName.values()], fileName: `${group.fileName}, ${fileName}` }
@@ -235,10 +302,32 @@ export function AvailabilityReview({
           type="file"
           accept="image/*"
           multiple
-          disabled={busy}
+          disabled={busy || jsonBusy}
           onChange={(event) => addFiles(event.target.files)}
         />
       </span>
+      <Button disabled={busy || jsonBusy} onClick={() => { setJsonError(''); setSchemaCopied(false); setJsonOpen(true); }}>
+        Вставить JSON
+      </Button>
+      <Sheet open={jsonOpen} title="Наличие из JSON" fullScreen onClose={() => { if (!jsonBusy) setJsonOpen(false); }}>
+        <p className="tb-subtitle">Вставь ответ агента для одного бренда и одной граммовки. Перед сохранением проверим дубли и покажем результат.</p>
+        <Button onClick={copySchema}>{schemaCopied ? 'Схема скопирована' : 'Скопировать схему'}</Button>
+        <pre className="tb-json-schema" aria-label="Схема JSON">{AVAILABILITY_SCHEMA}</pre>
+        <label className="tb-field__label" htmlFor="availability-json">JSON наличия</label>
+        <textarea
+          id="availability-json"
+          className="tb-input tb-json-input"
+          value={jsonText}
+          onChange={(event) => { setJsonText(event.target.value); setJsonError(''); }}
+          placeholder='{"brand":"Musthave","grams":250,"flavors":[{"name":"Alova","available":true}]}'
+          spellCheck={false}
+        />
+        {jsonError && <Banner tone="danger">{jsonError}</Banner>}
+        <Button variant="primary" block disabled={jsonBusy || !jsonText.trim()} onClick={importJson}>
+          {jsonBusy ? 'Проверяем…' : 'Добавить к проверке'}
+        </Button>
+        <Button block disabled={jsonBusy} onClick={() => setJsonOpen(false)}>Закрыть</Button>
+      </Sheet>
       {busy && <Banner>Распознаём вкусы на фото…</Banner>}
 
       {groups.length === 0 ? (
@@ -316,7 +405,7 @@ export function AvailabilityReview({
               граммовкам. Зачёркнутые на скринах останутся с выключенной галочкой. Уже заказанные позиции не пропадут, их пометят «больше не в наличии».
             </Banner>
           )}
-          <Button variant="primary" block disabled={!resolved || busy} onClick={save}>
+          <Button variant="primary" block disabled={!resolved || busy || jsonBusy} onClick={save}>
             Сохранить наличие
           </Button>
           {!resolved && (

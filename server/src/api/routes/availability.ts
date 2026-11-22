@@ -9,10 +9,40 @@ import { applyAvailabilityBatch, type AvailabilityGroup } from '../../domain/ava
 import { matchBrandByName, listFlavorsByBrand } from '../../domain/catalog.js';
 import { resolveEntries } from '../../domain/flavorMatch.js';
 import { judgeDoubtfulEntries } from '../../gemini/typoJudge.js';
-import { parseAvailabilityImage } from '../../gemini/availabilityParser.js';
+import { normalizeAvailabilityData, parseAvailabilityImage, type ParsedAvailability } from '../../gemini/availabilityParser.js';
 import type { GeminiClient } from '../../gemini/client.js';
 
 export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDir: string) {
+  type SessionNames = { brandId: number; names: string[] }[];
+
+  async function resolveParsed(parsed: ParsedAvailability, sessionNames: SessionNames) {
+    const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;
+    // Both image and manual JSON use the same catalogue, sibling and duplicate checks.
+    const known = brand ? (await listFlavorsByBrand(db, brand.id)).map((flavor) => flavor.name) : [];
+    if (brand && Array.isArray(sessionNames)) {
+      for (const sibling of sessionNames) {
+        if (sibling?.brandId !== brand.id || !Array.isArray(sibling.names)) continue;
+        for (const name of sibling.names) {
+          if (typeof name === 'string' && !known.includes(name)) known.push(name);
+        }
+      }
+    }
+    const resolved = resolveEntries(parsed.flavors, known);
+    const entries = brand
+      ? await judgeDoubtfulEntries(geminiClient, brand.name, resolved)
+      : resolved.map(({ checkWith: _flag, ...entry }) => entry);
+    const weightRow = parsed.grams
+      ? ((await db.select().from(weights).all()).find((row) => row.grams === parsed.grams) ?? null)
+      : null;
+    return {
+      detectedBrandName: parsed.brand,
+      brandId: brand?.id ?? null,
+      detectedGrams: parsed.grams,
+      weightId: weightRow?.id ?? null,
+      entries,
+    };
+  }
+
   return async function routes(api: FastifyInstance) {
     api.addHook('preHandler', requireAdmin);
 
@@ -61,29 +91,7 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
         },
       });
 
-      const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;
-      // Snap the read names to the brand's known spellings, merge the repeats,
-      // then let the model settle whatever the distance rule was unsure about.
-      // Known = the catalogue plus what the other screenshots of this session
-      // already said about the same brand (any weight): names must agree across
-      // them. Other brands are deliberately not consulted.
-      const known = brand ? (await listFlavorsByBrand(db, brand.id)).map((flavor) => flavor.name) : [];
-      if (brand) {
-        for (const sibling of sessionNames) {
-          if (sibling?.brandId !== brand.id || !Array.isArray(sibling.names)) continue;
-          for (const name of sibling.names) {
-            if (typeof name === 'string' && !known.includes(name)) known.push(name);
-          }
-        }
-      }
-      const resolved = resolveEntries(parsed.flavors, known);
-      const entries = brand
-        ? await judgeDoubtfulEntries(geminiClient, brand.name, resolved)
-        : resolved.map(({ checkWith: _flag, ...entry }) => entry);
-
-      const weightRow = parsed.grams
-        ? ((await db.select().from(weights).all()).find((row) => row.grams === parsed.grams) ?? null)
-        : null;
+      const review = await resolveParsed(parsed, sessionNames);
 
       await fs.mkdir(uploadsDir, { recursive: true });
       const imageRef = path.join(uploadsDir, `${crypto.randomUUID()}.jpg`);
@@ -94,22 +102,48 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
         .values({
           vendorId,
           // Kept for audit: what the screenshot claimed, before the admin corrected it.
-          brandId: brand?.id ?? null,
-          weightId: weightRow?.id ?? null,
+          brandId: review.brandId,
+          weightId: review.weightId,
           imageRef,
           rawAiResponse: JSON.stringify(parsed),
           createdAt: new Date().toISOString(),
         })
         .run();
 
-      return {
-        detectedBrandName: parsed.brand,
-        brandId: brand?.id ?? null,
-        detectedGrams: parsed.grams,
-        weightId: weightRow?.id ?? null,
-        entries,
-      };
+      return review;
     });
+
+    api.post<{ Body: { vendorId: number; data: unknown; sessionNames?: SessionNames } }>(
+      '/import-json', async (req, reply) => {
+        const { vendorId, data, sessionNames = [] } = req.body ?? {};
+        if (!Number.isInteger(vendorId) || vendorId <= 0) {
+          reply.code(400).send({ error: 'vendorId is required' });
+          return;
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data) ||
+            !Object.hasOwn(data, 'brand') || !Object.hasOwn(data, 'grams') || !Object.hasOwn(data, 'flavors')) {
+          reply.code(400).send({ error: 'brand, grams and flavors are required' });
+          return;
+        }
+        const grams = (data as { grams: unknown }).grams;
+        if (grams !== null && (!Number.isInteger(grams) || (grams as number) <= 0)) {
+          reply.code(400).send({ error: 'grams must be a positive integer or null' });
+          return;
+        }
+        let parsed: ParsedAvailability;
+        try {
+          parsed = normalizeAvailabilityData(data);
+        } catch (err) {
+          reply.code(400).send({ error: err instanceof Error ? err.message : 'invalid availability JSON' });
+          return;
+        }
+        if (parsed.flavors.length === 0) {
+          reply.code(400).send({ error: 'flavors must contain at least one name' });
+          return;
+        }
+        return resolveParsed(parsed, sessionNames);
+      }
+    );
 
     api.post<{
       Body: { vendorId: number; groups: AvailabilityGroup[]; wipeOthers?: boolean };

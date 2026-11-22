@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AvailabilityReview } from './AvailabilityReview';
 import { api, uploadAvailabilityImage } from '../apiClient';
@@ -37,10 +37,75 @@ function shot(name: string) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(api.post).mockResolvedValue({});
 });
 
 describe('AvailabilityReview', () => {
+  it('imports pasted JSON for review before saving and exposes a copyable schema', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({
+      detectedBrandName: 'DarkSide', brandId: 1, detectedGrams: 250, weightId: 2,
+      entries: [{ name: 'CyberKiwi', available: true }],
+    });
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Вставить JSON' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Наличие из JSON' }));
+    expect(dialog.getByRole('button', { name: 'Скопировать схему' })).toBeInTheDocument();
+    fireEvent.change(dialog.getByRole('textbox', { name: 'JSON наличия' }), { target: { value: '{"brand":"DarkSide","grams":250,"flavors":[{"name":"CyberKiwi","available":true}]}' } });
+    await user.click(dialog.getByRole('button', { name: 'Добавить к проверке' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/availability/import-json', {
+      vendorId: 7,
+      data: { brand: 'DarkSide', grams: 250, flavors: [{ name: 'CyberKiwi', available: true }] },
+      sessionNames: [],
+    }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /CyberKiwi/ })).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalledWith('/admin/availability/confirm', expect.anything());
+  });
+
+  it('keeps malformed pasted JSON in the popup and explains the error', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Вставить JSON' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Наличие из JSON' }));
+    fireEvent.change(dialog.getByRole('textbox', { name: 'JSON наличия' }), { target: { value: '{broken' } });
+    await user.click(dialog.getByRole('button', { name: 'Добавить к проверке' }));
+    expect(dialog.getByText('Некорректный JSON')).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalledWith('/admin/availability/import-json', expect.anything());
+  });
+
+  it('copies the JSON schema for the personal agent', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Вставить JSON' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Наличие из JSON' }));
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    await user.click(dialog.getByRole('button', { name: 'Скопировать схему' }));
+    expect(writeText).toHaveBeenCalledOnce();
+    const schema = JSON.parse(writeText.mock.calls[0][0]);
+    expect(schema.required).toEqual(['brand', 'grams', 'flavors']);
+    expect(schema.properties.flavors.items.required).toEqual(['name', 'available']);
+  });
+
+  it('merges pasted JSON with a screenshot without losing an available duplicate', async () => {
+    vi.mocked(uploadAvailabilityImage).mockResolvedValue({
+      detectedBrandName: 'DarkSide', brandId: 1, detectedGrams: 250, weightId: 2,
+      entries: [{ name: 'CyberKiwi', available: true }],
+    });
+    vi.mocked(api.post).mockResolvedValueOnce({
+      detectedBrandName: 'DarkSide', brandId: 1, detectedGrams: 250, weightId: 2,
+      entries: [{ name: 'CyberKiwi', available: false }],
+    });
+    const { user } = setup();
+    await user.upload(screen.getByLabelText('Скрины наличия'), shot('photo.jpg'));
+    await user.click(screen.getByRole('button', { name: 'Вставить JSON' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Наличие из JSON' }));
+    fireEvent.change(dialog.getByRole('textbox', { name: 'JSON наличия' }), { target: { value: '{"brand":"DarkSide","grams":250,"flavors":[{"name":"CyberKiwi","available":false}]}' } });
+    await user.click(dialog.getByRole('button', { name: 'Добавить к проверке' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/availability/import-json', expect.objectContaining({
+      sessionNames: [{ brandId: 1, names: ['CyberKiwi'] }],
+    })));
+    expect(screen.getByRole('button', { name: /CyberKiwi/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('fills brand and weight from what the screenshot said', async () => {
     vi.mocked(uploadAvailabilityImage).mockResolvedValue({
       detectedBrandName: 'DARKSIDE CORE',

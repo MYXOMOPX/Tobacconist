@@ -264,11 +264,13 @@ export function Sheet({
   title,
   onClose,
   children,
+  fullScreen = false,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  fullScreen?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -284,7 +286,7 @@ export function Sheet({
   return (
     <div className="tb-sheet__scrim" onClick={onClose}>
       <div
-        className="tb-sheet"
+        className={`tb-sheet${fullScreen ? ' tb-sheet--fullscreen' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
