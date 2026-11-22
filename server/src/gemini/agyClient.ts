@@ -9,6 +9,14 @@ import { GeminiError, classifyGeminiError } from './errors.js';
 export const DEFAULT_AGY_MODEL = 'gemini-3.6-flash-medium';
 
 type RunResult = { stdout: string; stderr: string };
+export type AgyEmptyResponseDiagnostic = {
+  stdout: string;
+  stderr: string;
+  status: string;
+  keys: string[];
+  model: string;
+  durationMs: number;
+};
 export type AgyRunner = (
   command: string,
   args: string[],
@@ -43,13 +51,33 @@ export function createAgyClient(options: {
   model?: string;
   timeoutMs?: number;
   run?: AgyRunner;
+  onEmptyResponse?: (diagnostic: AgyEmptyResponseDiagnostic) => void;
+  /** Include bounded stdout/stderr excerpts in the log while diagnosing agy. */
+  debugOutput?: boolean;
 }): GeminiClient {
   const command = options.command || 'agy';
   const model = options.model || DEFAULT_AGY_MODEL;
   const timeoutMs = options.timeoutMs ?? 180_000;
   const run = options.run ?? defaultRunner;
+  const debugOutput = options.debugOutput ?? process.env.AGY_LOG_RAW_OUTPUT === 'true';
+  const onEmptyResponse = options.onEmptyResponse ?? ((diagnostic: AgyEmptyResponseDiagnostic) => {
+    console.warn('[agy] empty model response ' + JSON.stringify({
+      model: diagnostic.model.slice(0, 100),
+      status: diagnostic.status,
+      keys: diagnostic.keys.slice(0, 12).map((key) => key.slice(0, 60)),
+      keyCount: diagnostic.keys.length,
+      durationMs: diagnostic.durationMs,
+      stdoutLength: diagnostic.stdout.length,
+      stderrLength: diagnostic.stderr.length,
+      ...(debugOutput ? {
+        stdoutPreview: diagnostic.stdout.slice(0, 1000),
+        stderrPreview: diagnostic.stderr.slice(0, 500),
+      } : {}),
+    }));
+  });
 
   async function ask(prompt: string, cwd: string): Promise<string> {
+    const startedAt = Date.now();
     const args = [
       '--print',
       prompt,
@@ -83,6 +111,20 @@ export function createAgyClient(options: {
     }
     if (reply.status !== 'SUCCESS' || typeof reply.response !== 'string') {
       throw classifyGeminiError(new Error(reply.error ?? `agy status ${reply.status ?? 'unknown'}`));
+    }
+    if (reply.response.trim() === '') {
+      try {
+        onEmptyResponse({
+          stdout: result.stdout,
+          stderr: result.stderr,
+          status: reply.status,
+          keys: Object.keys(reply),
+          model,
+          durationMs: Date.now() - startedAt,
+        });
+      } catch {
+        // Logging must not change the model result or hide the parser's error.
+      }
     }
     return reply.response;
   }

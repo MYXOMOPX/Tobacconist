@@ -15,6 +15,50 @@ describe('createAgyClient', () => {
     expect(args[args.indexOf('--print') + 1]).toBe('hi');
   });
 
+  it('reports the CLI envelope and stderr when agy succeeds with an empty response', async () => {
+    const onEmptyResponse = vi.fn();
+    const stdout = reply({ response: '', extra: 'no final message' });
+    const run: AgyRunner = async () => ({ stdout, stderr: 'warning from agy' });
+    const client = createAgyClient({ run, onEmptyResponse });
+
+    expect(await client.generateText!({ prompt: 'hi' })).toBe('');
+    expect(onEmptyResponse).toHaveBeenCalledWith(expect.objectContaining({
+      stdout,
+      stderr: 'warning from agy',
+      status: 'SUCCESS',
+      keys: ['status', 'response', 'extra'],
+    }));
+  });
+
+  it('writes an empty-response diagnostic to server logs by default', async () => {
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const run: AgyRunner = async () => ({ stdout: reply({ response: '', private: 'sensitive model data' }), stderr: 'warning from agy' });
+      await createAgyClient({ run }).generateText!({ prompt: 'hi' });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('[agy] empty model response'));
+      expect(log.mock.calls[0][0]).toContain('stderrLength');
+      expect(log.mock.calls[0][0]).not.toContain('warning from agy');
+      expect(log.mock.calls[0][0]).not.toContain('sensitive model data');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('includes bounded raw CLI output only when explicitly enabled', async () => {
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const extras = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`private_${i}_${'x'.repeat(100)}`, i]));
+      const run: AgyRunner = async () => ({ stdout: reply({ response: '', ...extras }), stderr: 'warning from agy' });
+      await createAgyClient({ run, debugOutput: true }).generateText!({ prompt: 'hi' });
+      const line = String(log.mock.calls[0][0]);
+      expect(line).toContain('warning from agy');
+      expect(line).toContain('keyCount');
+      expect(line.length).toBeLessThan(5000);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('hands an image over as a file the prompt points at', async () => {
     const run = vi.fn<AgyRunner>(async () => ({ stdout: reply({ response: 'x' }), stderr: '' }));
     await createAgyClient({ run }).generateFromImage({ imageBase64: 'AAAA', mimeType: 'image/png', prompt: 'read it' });
