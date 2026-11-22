@@ -11,6 +11,7 @@ describe('packPriceEur', () => {
   it('computes pack price from €/kg and grams', () => {
     expect(packPriceEur(20, 250)).toBeCloseTo(5.0);
     expect(packPriceEur(20, 100)).toBeCloseTo(2.0);
+    expect(packPriceEur(20, 120)).toBeCloseTo(2.4);
   });
 });
 
@@ -18,7 +19,7 @@ describe('catalog domain', () => {
   it('getWeights returns the seeded fixed set', async () => {
     const db = createTestDb();
     const w = await getWeights(db);
-    expect(w.map((x) => x.grams).sort((a, b) => a - b)).toEqual([100, 250]);
+    expect(w.map((x) => x.grams)).toEqual([100, 120, 250]);
   });
 
   it('createBrand + listBrands round-trips', async () => {

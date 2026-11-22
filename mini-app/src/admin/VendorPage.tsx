@@ -158,7 +158,7 @@ export function VendorPage({ vendorId, onBack }: { vendorId: number; onBack: () 
       <Card>
         <CardHead title="Цены" />
         <p className="tb-subtitle">
-          Цена за килограмм. Цена пачки считается из неё: 100г — десятая часть, 250г — четверть.
+          Цена за килограмм. Цена пачки считается пропорционально её граммовке.
         </p>
         {brands.map((brand) => {
           const existing = prices.find((price) => price.brandId === brand.id);

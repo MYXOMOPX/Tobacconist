@@ -93,6 +93,21 @@ describe('POST /parse', () => {
     expect(await fs.readdir(uploadsDir)).toHaveLength(1);
   });
 
+  it('resolves a 120g screenshot to the new weight', async () => {
+    const { app, db } = testApp(admin, JSON.stringify({
+      brand: 'DarkSide', grams: 120, flavors: [{ name: 'Mango', available: true }],
+    }));
+    const vendor = await createVendor(db, 'Vasya');
+    await createBrand(db, 'DarkSide');
+    const w120 = (await getWeights(db)).find((weight) => weight.grams === 120)!;
+    const form = screenshot(vendor.id);
+    const res = await app.inject({
+      method: 'POST', url: '/api/admin/availability/parse', payload: form, headers: form.getHeaders(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ detectedGrams: 120, weightId: w120.id });
+  });
+
   it('snaps misread flavours to the known list and merges repeats', async () => {
     const { app, db } = testApp(
       admin,

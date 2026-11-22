@@ -10,7 +10,7 @@ describe('createTestDb', () => {
   it('applies the migration and seeds fixed weights', async () => {
     const db = createTestDb();
     const rows = await db.select().from(weights).all();
-    expect(rows.map((r) => r.grams).sort((a, b) => a - b)).toEqual([100, 250]);
+    expect(rows.map((r) => r.grams).sort((a, b) => a - b)).toEqual([100, 120, 250]);
   });
 
   it('allows inserting and reading a brand', async () => {
@@ -37,7 +37,7 @@ describe('createDb against a persistent file', () => {
 
     const first = createDb(file);
     opened.push(first);
-    expect((await first.select().from(weights).all()).length).toBe(2);
+    expect((await first.select().from(weights).all()).length).toBe(3);
 
     // Second boot (e.g. container restart against a persistent volume)
     let second: Db | undefined;
@@ -47,7 +47,26 @@ describe('createDb against a persistent file', () => {
     opened.push(second!);
 
     const rows = await second!.select().from(weights).all();
-    expect(rows.map((r) => r.grams).sort((a, b) => a - b)).toEqual([100, 250]);
+    expect(rows.map((r) => r.grams).sort((a, b) => a - b)).toEqual([100, 120, 250]);
+  });
+
+  it('adds 120g to an existing database without disturbing its catalogue', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tobacconist-weight-upgrade-'));
+    const file = path.join(dir, 'data.sqlite');
+    const first = createDb(file);
+    await first.insert(brands).values({ name: 'DarkSide' }).run();
+    closeDb(first);
+
+    // Emulate a database saved by the previous release, before 0004 existed.
+    const old = new Database(file);
+    old.exec("DELETE FROM weights WHERE grams = 120; DELETE FROM schema_migrations WHERE name = '0004_weight_120.sql';");
+    old.close();
+
+    const upgraded = createDb(file);
+    opened.push(upgraded);
+    expect((await upgraded.select().from(weights).all()).map((row) => row.grams).sort((a, b) => a - b))
+      .toEqual([100, 120, 250]);
+    expect(await upgraded.select().from(brands).all()).toEqual([{ id: 1, name: 'DarkSide' }]);
   });
 
   /**
@@ -109,7 +128,7 @@ describe('createDb against a persistent file', () => {
     opened.push(db);
 
     expect(fs.existsSync(file)).toBe(true);
-    expect((await db.select().from(weights).all()).length).toBe(2);
+    expect((await db.select().from(weights).all()).length).toBe(3);
   });
 
   it('does not re-run a migration that already ran', async () => {

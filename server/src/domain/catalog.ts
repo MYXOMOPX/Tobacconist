@@ -1,4 +1,4 @@
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, asc } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   availabilityUploads,
@@ -20,7 +20,7 @@ export function packPriceEur(pricePerKgEur: number, grams: number): number {
 }
 
 export async function getWeights(db: Db) {
-  return db.select().from(weights).all();
+  return db.select().from(weights).orderBy(asc(weights.grams)).all();
 }
 
 export async function createBrand(db: Db, name: string) {

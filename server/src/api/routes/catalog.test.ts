@@ -25,7 +25,7 @@ describe('catalog routes', () => {
     const { app } = testApp(admin);
     const res = await app.inject({ method: 'GET', url: '/api/admin/weights' });
     expect(res.statusCode).toBe(200);
-    expect(res.json().map((w: any) => w.grams).sort()).toEqual([100, 250]);
+    expect(res.json().map((w: any) => w.grams)).toEqual([100, 120, 250]);
   });
 
   it('POST /brands creates a brand, GET /brands lists it', async () => {

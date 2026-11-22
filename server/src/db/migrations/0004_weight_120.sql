@@ -1,0 +1,1 @@
+INSERT OR IGNORE INTO weights (grams) VALUES (120);
