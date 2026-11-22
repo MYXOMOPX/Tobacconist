@@ -72,10 +72,33 @@ describe('parseAvailabilityImage', () => {
     ]);
   });
 
+  it('reads a JSON object surrounded by model commentary', async () => {
+    const client = mockClient('Result follows:\n{"brand":"MUSTHAVE","grams":250,"flavors":[{"name":"Alova","available":true}]}\nDone.');
+    expect((await parseAvailabilityImage(client, image)).flavors).toEqual([{ name: 'Alova', available: true }]);
+  });
+
+  it('skips an unrelated object before the availability result', async () => {
+    const client = mockClient('Example: {}\nActual: {"brand":"MUSTHAVE","grams":250,"flavors":[]}');
+    expect((await parseAvailabilityImage(client, image)).brand).toBe('MUSTHAVE');
+  });
+
+  it('finds the result after an unmatched brace in commentary', async () => {
+    const client = mockClient('The heading contains {\n{"brand":"MUSTHAVE","grams":250,"flavors":[]}');
+    expect((await parseAvailabilityImage(client, image)).brand).toBe('MUSTHAVE');
+  });
+
+  it('reads a JSON object returned as an encoded string', async () => {
+    const payload = '{"brand":"MUSTHAVE","grams":250,"flavors":[]}';
+    expect((await parseAvailabilityImage(mockClient(JSON.stringify(payload)), image)).brand).toBe('MUSTHAVE');
+  });
+
   it('throws a descriptive error on an unparseable response', async () => {
     const client = { generateFromImage: vi.fn().mockResolvedValue('sorry, I cannot help with that') };
-    await expect(parseAvailabilityImage(client, image)).rejects.toThrow('not valid JSON');
+    const onInvalidResponse = vi.fn();
+    await expect(parseAvailabilityImage(client, { ...image, onInvalidResponse })).rejects.toThrow('not valid JSON');
     expect(client.generateFromImage).toHaveBeenCalledTimes(2);
+    expect(onInvalidResponse).toHaveBeenCalledOnce();
+    expect(onInvalidResponse).toHaveBeenCalledWith('sorry, I cannot help with that');
   });
 
   it('retries once when the first agy response is not JSON', async () => {
@@ -87,6 +110,16 @@ describe('parseAvailabilityImage', () => {
     expect(await parseAvailabilityImage(client, image)).toEqual({
       brand: 'MUSTHAVE', grams: 250, flavors: [{ name: 'Alova', available: true }],
     });
+    expect(client.generateFromImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not mistake a flavor inside truncated JSON for the full response', async () => {
+    const client = {
+      generateFromImage: vi.fn()
+        .mockResolvedValueOnce('{"brand":"MUSTHAVE","grams":250,"flavors":[{"name":"Alova","available":true}')
+        .mockResolvedValueOnce('{"brand":"MUSTHAVE","grams":250,"flavors":[]}'),
+    };
+    expect((await parseAvailabilityImage(client, image)).flavors).toEqual([]);
     expect(client.generateFromImage).toHaveBeenCalledTimes(2);
   });
 

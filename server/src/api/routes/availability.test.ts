@@ -5,6 +5,7 @@ import FormData from 'form-data';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import { eq } from 'drizzle-orm';
 import { createTestDb } from '../../db/client';
 import { createVendor } from '../../domain/vendors';
@@ -28,10 +29,16 @@ afterEach(async () => {
   await fs.rm(uploadsDir, { recursive: true, force: true });
 });
 
-function testApp(user: AuthedUser, geminiResponse: string) {
+function testApp(user: AuthedUser, geminiResponse: string, logLines?: string[]) {
   const db = createTestDb();
   const geminiClient: GeminiClient = { generateFromImage: async () => geminiResponse };
-  const app = Fastify();
+  const stream = logLines && new Writable({
+    write(chunk, _encoding, done) {
+      logLines.push(String(chunk));
+      done();
+    },
+  });
+  const app = Fastify(stream ? { logger: { stream } } : {});
   app.register(multipart);
   app.addHook('preHandler', async (req) => {
     req.authedUser = user;
@@ -237,6 +244,18 @@ describe('POST /parse', () => {
       .where(eq(availabilityUploads.vendorId, vendor.id))
       .all();
     expect(records).toHaveLength(0);
+  });
+
+  it('logs the failed response shape without logging screenshot text', async () => {
+    const lines: string[] = [];
+    const { app, db } = testApp(admin, 'Private Vendor Stock List', lines);
+    const vendor = await createVendor(db, 'Vasya');
+    const form = screenshot(vendor.id);
+    await app.inject({
+      method: 'POST', url: '/api/admin/availability/parse', payload: form, headers: form.getHeaders(),
+    });
+    expect(lines.join('')).toContain('responseLength');
+    expect(lines.join('')).not.toContain('Private Vendor Stock List');
   });
 });
 

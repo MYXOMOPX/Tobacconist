@@ -51,6 +51,14 @@ export function availabilityRoutes(db: Db, geminiClient: GeminiClient, uploadsDi
       const parsed = await parseAvailabilityImage(geminiClient, {
         imageBase64: fileBuffer.toString('base64'),
         mimeType,
+        onInvalidResponse: (raw) => {
+          const trimmed = raw.trim();
+          const responseShape = !trimmed ? 'empty' : trimmed.startsWith('```') ? 'fenced'
+            : trimmed.startsWith('{') ? 'object-like' : trimmed.startsWith('[') ? 'array-like'
+            : trimmed.startsWith('"') ? 'quoted' : 'text';
+          req.log.warn({ responseShape, responseLength: raw.length, endsWithBrace: trimmed.endsWith('}') },
+            'availability model response was not JSON');
+        },
       });
 
       const brand = parsed.brand ? await matchBrandByName(db, parsed.brand) : null;

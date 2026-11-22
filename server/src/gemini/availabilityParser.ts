@@ -20,13 +20,55 @@ function extractJson(text: string): string {
   return (fenced ? fenced[1] : text).trim();
 }
 
+function parseJsonResponse(raw: string): unknown {
+  const text = extractJson(raw);
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+  } catch {
+    // agy may wrap a JSON object in an explanation. Find the complete object,
+    // respecting braces inside quoted strings, before asking the model again.
+  }
+
+  for (let start = text.indexOf('{'); start !== -1; start = text.indexOf('{', start + 1)) {
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let end = start; end < text.length; end++) {
+      const char = text[end];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (char === '\\') escaped = true;
+        else if (char === '"') quoted = false;
+      } else if (char === '"') {
+        quoted = true;
+      } else if (char === '{') {
+        depth++;
+      } else if (char === '}' && --depth === 0) {
+        try {
+          const candidate: unknown = JSON.parse(text.slice(start, end + 1));
+          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate) &&
+              'brand' in candidate && 'grams' in candidate && 'flavors' in candidate) {
+            return candidate;
+          }
+        } catch {
+          // An unrelated object may precede the availability result.
+        }
+        start = end;
+        break;
+      }
+    }
+  }
+  throw new SyntaxError('not valid JSON');
+}
+
 function fail(reason: string): never {
   throw new GeminiError('bad_response', reason);
 }
 
 export async function parseAvailabilityImage(
   client: GeminiClient,
-  params: { imageBase64: string; mimeType: string }
+  params: { imageBase64: string; mimeType: string; onInvalidResponse?: (raw: string) => void }
 ): Promise<ParsedAvailability> {
   let parsed: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -36,10 +78,13 @@ export async function parseAvailabilityImage(
       prompt: attempt === 0 ? PROMPT : `${PROMPT}\nYour previous reply could not be parsed as JSON. Return only the JSON object, with no explanation.`,
     });
     try {
-      parsed = JSON.parse(extractJson(raw));
+      parsed = parseJsonResponse(raw);
       break;
     } catch {
-      if (attempt === 1) fail('not valid JSON');
+      if (attempt === 1) {
+        try { params.onInvalidResponse?.(raw); } catch { /* diagnostics must not hide the parse failure */ }
+        fail('not valid JSON');
+      }
     }
   }
 
