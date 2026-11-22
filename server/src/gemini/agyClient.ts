@@ -86,6 +86,10 @@ export function createAgyClient(options: {
       // Read-only: the model is only to look at a picture and answer.
       '--mode',
       'plan',
+      // The screenshot is already in cwd. Let agy inspect it with read_file,
+      // but never let image text trigger shell commands in a headless run.
+      '--settings',
+      JSON.stringify({ permissions: { allow: [`read_file(${cwd})`], deny: ['command(*)'] } }),
       '--output-format',
       'json',
       '--print-timeout',
@@ -143,7 +147,7 @@ export function createAgyClient(options: {
       inTempDir(async (dir) => {
         const file = path.join(dir, `screenshot.${EXTENSIONS[mimeType] ?? 'jpg'}`);
         await fs.writeFile(file, Buffer.from(imageBase64, 'base64'));
-        return ask(`Read the image file "${file}", then do the following. Do not change anything.\n\n${prompt}`, dir);
+        return ask(`Use only the built-in read_file tool to inspect the image. Do not use Bash, command, shell, Python, or any other tool. Read the image file "${file}" and return JSON only.\n\n${prompt}`, dir);
       }),
     generateText: ({ prompt }) => inTempDir((dir) => ask(prompt, dir)),
   };

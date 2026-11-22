@@ -67,6 +67,17 @@ describe('createAgyClient', () => {
     expect(args[args.indexOf('--model') + 1]).toBe(DEFAULT_AGY_MODEL);
   });
 
+  it('uses the image reader without granting shell commands', async () => {
+    const run = vi.fn<AgyRunner>(async () => ({ stdout: reply({ response: '{"ok":true}' }), stderr: '' }));
+    await createAgyClient({ run }).generateFromImage({ imageBase64: 'AAAA', mimeType: 'image/png', prompt: 'read it' });
+    const args = run.mock.calls[0][1];
+    expect(args[args.indexOf('--print') + 1]).toContain('Use only the built-in read_file tool');
+    const settings = JSON.parse(args[args.indexOf('--settings') + 1]);
+    expect(settings.permissions.deny).toContain('command(*)');
+    expect(settings.permissions.allow).toContain(`read_file(${run.mock.calls[0][2].cwd})`);
+    expect(args).not.toContain('--dangerously-skip-permissions');
+  });
+
   it('says so when agy is not installed', async () => {
     const run: AgyRunner = async () => {
       throw Object.assign(new Error('spawn agy ENOENT'), { code: 'ENOENT' });
